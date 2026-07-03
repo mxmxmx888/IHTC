@@ -1,0 +1,64 @@
+using "./ihtc.mm"
+
+fun admittedPatiensAmount(): int {
+    var patients = Patient.all()
+    var amount = patients.size()
+    return amount
+} 
+
+// not finished
+fun roomCapacityViolation(): int {
+
+}
+
+fun removedPatients(): int {
+    var tracker = DeletedAdmissionsTracker.firstOrNull()
+    return tracker?.count ?? 0
+}
+
+fun theatreCapacityViolation(): int{
+    var totalCapacityViolation = 0
+    var theatreAvailability = OperatingTheatreAvailability.all()
+    for (thea_a in theatreAvailability){
+        var day = thea_a.day
+        var theatre = thea_a.operatingTheatreId
+        var maxCapacity = thea_a.maxCapacity
+        var admissions = Admission.all()
+        var matchingAdmissions = admissions.filter((a)=> a.admissionDay == day && a.operationTheatreId == theatre)
+        var dayCapacity = 0
+        for (match in matchingAdmissions){
+            dayCapacity = dayCapacity + match.patientId.surgeryDuration
+        }
+        if (dayCapacity > maxCapacity){
+            totalCapacityViolation = totalCapacityViolation + (dayCapacity - maxCapacity)
+        }
+    }
+    return totalCapacityViolation
+}
+
+fun surgeonCapacityViolation(): int {
+    var totalCapacityViolation = 0
+    var surgeonAvailabilty = SurgeonAvailability.all()
+    for (sur_a in surgeonAvailabilty){
+        var day = sur_a.day
+        var surgeon = sur_a.surgeonId
+        var maxOpTime = sur_a.maxOperatingTime
+        var admissions = Admission.all()
+        var matchingAdmissions = admissions.filter((a) => a.admissionDay == day && a.patientId.assignedSurgeonId == surgeon)
+        var opTimeForDay = 0
+        for (match in matchingAdmissions){
+            opTimeForDay = opTimeForDay + match.patientId.surgeryDuration
+        }
+        if (opTimeForDay > maxOpTime){
+            totalCapacityViolation = totalCapacityViolation + (opTimeForDay - maxOpTime)
+        }
+    
+    
+    }
+    return totalCapacityViolation
+}
+
+
+fun roomOccupancyStandardDeviation(): double{
+    return 0.0
+}
