@@ -1,4 +1,4 @@
-using "./ihtc.mm"
+using "../ihtc.mm"
 
 
 hospital: HospitalInstance {
