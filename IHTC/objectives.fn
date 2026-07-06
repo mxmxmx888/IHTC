@@ -6,9 +6,21 @@ fun admittedPatiensAmount(): int {
     return amount
 } 
 
-// not finished
-fun roomCapacityViolation(): int {
 
+fun roomCapacityViolation(): int {
+    var totalCapacityViolation = 0
+    var roomAvailability = RoomAvailability.all()
+    for (room_a in roomAvailability){
+        var room = room_a.roomId
+        var maxCapacity = room.maxCapacity
+        var currentOccupancy = room_a.occupiedBeds
+        if (currentOccupancy > maxCapacity) {
+            totalCapacityViolation = totalCapacityViolation + currentOccupancy - maxCapacity
+        }
+
+    }
+    
+    return 0 
 }
 
 fun removedPatients(): int {

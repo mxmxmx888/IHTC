@@ -29,6 +29,7 @@ HospitalInstance.rooms[0..*]-->Room
 class Patient {
     id: int
     isMandatory: boolean
+    isScheduled: boolean //temporary workaround for Transformation 2
     dueDate: int
     releaseDate: int
     ageGroup: AgeGroup
