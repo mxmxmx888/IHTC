@@ -24,6 +24,7 @@ HospitalInstance.patients[0..*]--> Patient
 HospitalInstance.operatingtheatres[0..*]-->OperatingTheatre
 HospitalInstance.surgeons[0..*]-->Surgeon
 HospitalInstance.rooms[0..*]-->Room
+HospitalInstance.nurses[0..*] --> Nurse
 
 
 class Patient {
@@ -39,6 +40,7 @@ class Patient {
 }
 Patient.assignedSurgeonId[1..1]--> Surgeon
 Patient.incompatibleRooms[0..*] --> Room
+Patient.dayDemand[1..*] --> PatientDayDemand
 
 class Occupant {
     stayLength: int
@@ -90,4 +92,36 @@ class RoomAvailability {
 RoomAvailability.roomId[1..1] --> Room
 
 
+class HospitalisationShift {
+    day: int
+    shift: int
+    workload: int
+    skillLevelRequired: int
+}
+HospitalisationShift.room[1..1] --> Room
+HospitalisationShift.patient[0..*] --> Patient
 
+class Nurse {
+    id: int
+    skillLevel: int 
+}
+
+class NurseWorkingShift {
+    day: int
+    shift: int
+    maxLoad: int
+}
+NurseWorkingShift.nurse[1..1] --> Nurse
+
+class RoomShiftAssignment {
+}
+RoomShiftAssignment.nurse[1..1] --> Nurse
+RoomShiftAssignment.hospitalisationShift[1..1] --> HospitalisationShift
+
+
+class PatientDayDemand {
+    relativeDay: int
+    workloadProduced: int
+    skillLevelRequired: int
+}
+PatientDayDemand.patient[1..1] --> Patient
