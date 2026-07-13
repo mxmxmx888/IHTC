@@ -16,15 +16,22 @@ enum AgeGroup {
     ELDERLY
 }
 
-
+//siu 
 class HospitalInstance {
     decisionHorizon: int
 }
-HospitalInstance.patients[0..*]--> Patient 
-HospitalInstance.operatingtheatres[0..*]-->OperatingTheatre
-HospitalInstance.surgeons[0..*]-->Surgeon
-HospitalInstance.rooms[0..*]-->Room
+HospitalInstance.patients[0..*] --> Patient
+HospitalInstance.operatingtheatres[0..*] --> OperatingTheatre
+HospitalInstance.surgeons[0..*] --> Surgeon
+HospitalInstance.rooms[0..*] --> Room
 HospitalInstance.nurses[0..*] --> Nurse
+HospitalInstance.surgeonAvailabilities[0..*] --> SurgeonAvailability
+HospitalInstance.operatingTheatreAvailabilities[0..*] --> OperatingTheatreAvailability
+HospitalInstance.roomAvailabilities[0..*] --> RoomAvailability
+HospitalInstance.hospitalisationShifts[0..*] --> HospitalisationShift
+HospitalInstance.nurseWorkingShifts[0..*] --> NurseWorkingShift
+HospitalInstance.roomShiftAssignments[0..*] --> RoomShiftAssignment
+HospitalInstance.deletedAdmissionsTrackers[0..*] --> DeletedAdmissionsTracker
 
 
 class Patient {

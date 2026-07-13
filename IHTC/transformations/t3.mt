@@ -1,21 +1,21 @@
 using "../ihtc.mm"
 
-// Transformation 2: insert the non-mandatory unscheduled patient with the
-// smallest surgery duration into a feasible admission day, room, and theatre.
+// Transformation 3: find the earliest available surgeon, then find a theatre
+// and room available on the same day, and insert a random compatible
+// non-mandatory patient.
 
 match {
     hospital: HospitalInstance {}
 
-    patient: Patient {
-        isScheduled = true
-    }
+    patient: Patient {}
 
     surgeon: Surgeon {}
-    room: Room {}
-    theatre: OperatingTheatre {}
-
     surgeonAvailability: SurgeonAvailability {}
+
+    theatre: OperatingTheatre {}
     theatreAvailability: OperatingTheatreAvailability {}
+
+    room: Room {}
     roomAvailability: RoomAvailability {}
 
     forbid existingAdmission: Admission {}
@@ -23,6 +23,9 @@ match {
     var day = surgeonAvailability.day
 
     hospital.patients -- patient
+    hospital.surgeonAvailabilities -- surgeonAvailability
+    hospital.operatingTheatreAvailabilities -- theatreAvailability
+    hospital.roomAvailabilities -- roomAvailability
 
     patient.assignedSurgeonId -- surgeon
     surgeonAvailability.surgeonId -- surgeon
@@ -43,18 +46,19 @@ match {
     where patient.isMandatory == false
     where patient.isScheduled == false
 
+    where surgeonAvailability.maxOperatingTime > 0
     where theatreAvailability.day == day
     where roomAvailability.day == day
-    where patient.releaseDate <= day
-    where day <= patient.dueDate
-    where patient.surgeryDuration <= surgeonAvailability.maxOperatingTime
     where theatreAvailability.maxCapacity > 0
     where roomAvailability.occupiedBeds < room.maxCapacity
 
-    where hospital.patients.all((other) =>
-        other == patient ||
-        other.isMandatory == true ||
-        other.isScheduled == true ||
-        other.surgeryDuration >= patient.surgeryDuration
+    where patient.releaseDate <= day
+    where day <= patient.dueDate
+    where patient.surgeryDuration <= surgeonAvailability.maxOperatingTime
+
+    where hospital.surgeonAvailabilities.all((other) =>
+        other == surgeonAvailability ||
+        other.maxOperatingTime == 0 ||
+        other.day >= surgeonAvailability.day
     )
 }
