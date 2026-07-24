@@ -25,7 +25,7 @@ class ValidationError(ValueError):
     """Raised when the input JSON does not match the expected schema."""
 
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 PROBLEM_METADATA_PATH = PROJECT_ROOT / "references" / "ihtc_input_reference.json"
 
 
