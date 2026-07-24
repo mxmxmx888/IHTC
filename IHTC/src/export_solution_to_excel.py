@@ -25,9 +25,8 @@ class ValidationError(ValueError):
     """Raised when the input JSON does not match the expected schema."""
 
 
-PROBLEM_METADATA_PATH = (
-    Path(__file__).resolve().parent.parent / "references" / "ihtc_input_reference.json"
-)
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROBLEM_METADATA_PATH = PROJECT_ROOT / "references" / "ihtc_input_reference.json"
 
 
 @dataclass(frozen=True)
@@ -741,8 +740,7 @@ def build_workbook(
 def main() -> int:
     args = parse_args()
     input_path = Path(args.input).expanduser().resolve()
-    project_dir = Path(__file__).resolve().parent
-    exports_dir = project_dir / "exports"
+    exports_dir = PROJECT_ROOT / "exports"
     output_name = Path(args.output).name
     output_path = exports_dir / output_name
 
