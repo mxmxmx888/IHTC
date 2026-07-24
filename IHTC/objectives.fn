@@ -1,92 +1,132 @@
 using "./ihtc.mm"
 
 fun admittedPatientsAmount(): int {
-    var patients = Patient.all()
-    var amount = patients.size()
-    return amount
-} 
-
+    return Admission.all().size()
+}
 
 fun roomCapacityViolation(): int {
     var totalCapacityViolation = 0
-    var roomAvailability = RoomAvailability.all()
-    for (room_a in roomAvailability){
-        var room = room_a.roomId
-        var maxCapacity = room.maxCapacity
-        var currentOccupancy = room_a.occupiedBeds
-        if (currentOccupancy > maxCapacity) {
-            totalCapacityViolation = totalCapacityViolation + currentOccupancy - maxCapacity
-        }
+    var roomAvailabilities = RoomAvailability.all()
 
+    for (roomAvailability in roomAvailabilities) {
+        var room = roomAvailability.roomId
+        var maxCapacity = room.maxCapacity
+        var currentOccupancy = roomAvailability.occupiedBeds
+
+        if (currentOccupancy > maxCapacity) {
+            totalCapacityViolation = totalCapacityViolation + (currentOccupancy - maxCapacity)
+        }
     }
-    
-    return 0 
+
+    return totalCapacityViolation
 }
 
 fun removedPatients(): int {
-    var tracker = DeletedAdmissionsTracker.firstOrNull()
-    return tracker?.count ?? 0
+    var removedCount = 0
+    var patients = Patient.all()
+
+    for (patient in patients) {
+        if (patient.isMandatory == true) {
+            var matchingAdmissions = Admission.all().filter((admission) =>
+                admission.patientId == patient
+            )
+
+            if (matchingAdmissions.size() == 0) {
+                removedCount = removedCount + 1
+            }
+        }
+    }
+
+    return removedCount
 }
 
-fun theatreCapacityViolation(): int{
+fun theatreCapacityViolation(): int {
     var totalCapacityViolation = 0
-    var theatreAvailability = OperatingTheatreAvailability.all()
-    for (thea_a in theatreAvailability){
-        var day = thea_a.day
-        var theatre = thea_a.operatingTheatreId
-        var maxCapacity = thea_a.maxCapacity
-        var admissions = Admission.all()
-        var matchingAdmissions = admissions.filter((a)=> a.admissionDay == day && a.operationTheatreId == theatre)
+    var theatreAvailabilities = OperatingTheatreAvailability.all()
+
+    for (theatreAvailability in theatreAvailabilities) {
+        var day = theatreAvailability.day
+        var theatre = theatreAvailability.operatingTheatreId
+        var maxCapacity = theatreAvailability.maxCapacity
+
+        var matchingAdmissions = Admission.all().filter((admission) =>
+            admission.admissionDay == day &&
+            admission.operationTheatreId == theatre
+        )
+
         var dayCapacity = 0
-        for (match in matchingAdmissions){
-            dayCapacity = dayCapacity + match.patientId.surgeryDuration
+        for (admission in matchingAdmissions) {
+            dayCapacity = dayCapacity + admission.patientId.surgeryDuration
         }
-        if (dayCapacity > maxCapacity){
+
+        if (dayCapacity > maxCapacity) {
             totalCapacityViolation = totalCapacityViolation + (dayCapacity - maxCapacity)
         }
     }
+
     return totalCapacityViolation
 }
 
 fun surgeonCapacityViolation(): int {
     var totalCapacityViolation = 0
-    var surgeonAvailabilty = SurgeonAvailability.all()
-    for (sur_a in surgeonAvailabilty){
-        var day = sur_a.day
-        var surgeon = sur_a.surgeonId
-        var maxOpTime = sur_a.maxOperatingTime
-        var admissions = Admission.all()
-        var matchingAdmissions = admissions.filter((a) => a.admissionDay == day && a.patientId.assignedSurgeonId == surgeon)
-        var opTimeForDay = 0
-        for (match in matchingAdmissions){
-            opTimeForDay = opTimeForDay + match.patientId.surgeryDuration
+    var surgeonAvailabilities = SurgeonAvailability.all()
+
+    for (surgeonAvailability in surgeonAvailabilities) {
+        var day = surgeonAvailability.day
+        var surgeon = surgeonAvailability.surgeonId
+        var maxOperatingTime = surgeonAvailability.maxOperatingTime
+
+        var matchingAdmissions = Admission.all().filter((admission) =>
+            admission.admissionDay == day &&
+            admission.patientId.assignedSurgeonId == surgeon
+        )
+
+        var usedOperatingTime = 0
+        for (admission in matchingAdmissions) {
+            usedOperatingTime = usedOperatingTime + admission.patientId.surgeryDuration
         }
-        if (opTimeForDay > maxOpTime){
-            totalCapacityViolation = totalCapacityViolation + (opTimeForDay - maxOpTime)
+
+        if (usedOperatingTime > maxOperatingTime) {
+            totalCapacityViolation = totalCapacityViolation + (usedOperatingTime - maxOperatingTime)
         }
-    
-    
     }
+
     return totalCapacityViolation
 }
 
-fun totalSkillLevelViolation(): int{
+fun totalSkillLevelViolation(): int {
     var totalViolation = 0
-    var rsaArray = RoomShiftAssignment.all()
+    var assignments = RoomShiftAssignment.all()
 
-    for (rsa in rsaArray) {
-        var nurse = rsa.nurse
-        var shift = rsa.hospitalisationShift
+    for (assignment in assignments) {
+        var nurse = assignment.nurse
+        var shift = assignment.hospitalisationShift
+
         if (nurse.skillLevel < shift.skillLevelRequired) {
             totalViolation = totalViolation + (shift.skillLevelRequired - nurse.skillLevel)
         }
     }
+
     return totalViolation
 }
 
-fun RoomShiftCoverage():int {
-    var rsaArray = RoomShiftAssignment.all()
-    return rsaArray.size()
+fun RoomShiftCoverage(): int {
+    var coveredShiftCount = 0
+    var shifts = HospitalisationShift.all()
+
+    for (shift in shifts) {
+        if (shift.workload > 0) {
+            var matchingAssignments = RoomShiftAssignment.all().filter((assignment) =>
+                assignment.hospitalisationShift == shift
+            )
+
+            if (matchingAssignments.size() > 0) {
+                coveredShiftCount = coveredShiftCount + 1
+            }
+        }
+    }
+
+    return coveredShiftCount
 }
 
 fun NurseWorkloadDistributionInbalance(): double {
@@ -99,13 +139,14 @@ fun NurseWorkloadDistributionInbalance(): double {
 
     var totalWorkload = 0.0
 
-    // First pass: total workload across all nurses.
     for (nurse in nurses) {
         var nurseLoad = 0.0
-        var matches = RoomShiftAssignment.all().filter((rsa) => rsa.nurse == nurse)
+        var matches = RoomShiftAssignment.all().filter((assignment) =>
+            assignment.nurse == nurse
+        )
 
-        for (rsa in matches) {
-            nurseLoad = nurseLoad + rsa.hospitalisationShift.workload
+        for (assignment in matches) {
+            nurseLoad = nurseLoad + assignment.hospitalisationShift.workload
         }
 
         totalWorkload = totalWorkload + nurseLoad
@@ -114,13 +155,14 @@ fun NurseWorkloadDistributionInbalance(): double {
     var meanWorkload = totalWorkload / nurseCount
     var varianceSum = 0.0
 
-    // Second pass: sum squared deviations from the mean.
     for (nurse in nurses) {
         var nurseLoad = 0.0
-        var matches = RoomShiftAssignment.all().filter((rsa) => rsa.nurse == nurse)
+        var matches = RoomShiftAssignment.all().filter((assignment) =>
+            assignment.nurse == nurse
+        )
 
-        for (rsa in matches) {
-            nurseLoad = nurseLoad + rsa.hospitalisationShift.workload
+        for (assignment in matches) {
+            nurseLoad = nurseLoad + assignment.hospitalisationShift.workload
         }
 
         var diff = nurseLoad - meanWorkload
@@ -130,35 +172,80 @@ fun NurseWorkloadDistributionInbalance(): double {
     return varianceSum / nurseCount
 }
 
-
-
 fun totalWorkloadViolation(): int {
     var totalViolation = 0
-    var rsaArray = RoomShiftAssignment.all()
+    var workingShifts = NurseWorkingShift.all()
+    var assignments = RoomShiftAssignment.all()
 
-    for (rsa in rsaArray) {
-        var nurse = rsa.nurse
-        var shift = rsa.hospitalisationShift
-
-        var matching = NurseWorkingShift.all().filter((nws) =>
-            nws.nurse == nurse &&
-            nws.day == shift.day &&
-            nws.shift == shift.shift
+    for (workingShift in workingShifts) {
+        var currentLoad = 0
+        var matchingAssignments = assignments.filter((assignment) =>
+            assignment.nurse == workingShift.nurse &&
+            assignment.hospitalisationShift.day == workingShift.day &&
+            assignment.hospitalisationShift.shift == workingShift.shift
         )
 
-        if (matching.size() > 0) {
-            var maxLoad = matching.first().maxLoad
+        for (assignment in matchingAssignments) {
+            currentLoad = currentLoad + assignment.hospitalisationShift.workload
+        }
 
-            if (shift.workload > maxLoad) {
-                totalViolation = totalViolation + (shift.workload - maxLoad)
-            }
+        if (currentLoad > workingShift.maxLoad) {
+            totalViolation = totalViolation + (currentLoad - workingShift.maxLoad)
+        }
+    }
+
+    for (assignment in assignments) {
+        var nurse = assignment.nurse
+        var shift = assignment.hospitalisationShift
+
+        var matchingWorkingShifts = workingShifts.filter((workingShift) =>
+            workingShift.nurse == nurse &&
+            workingShift.day == shift.day &&
+            workingShift.shift == shift.shift
+        )
+
+        if (matchingWorkingShifts.size() == 0) {
+            totalViolation = totalViolation + shift.workload
         }
     }
 
     return totalViolation
 }
 
+fun roomOccupancyStandardDeviation(): double {
+    var roomAvailabilities = RoomAvailability.all()
+    var availabilityCount = roomAvailabilities.size()
 
-fun roomOccupancyStandardDeviation(): double{
-    return 0.0
+    if (availabilityCount == 0) {
+        return 0.0
+    }
+
+    var totalOccupancy = 0.0
+    for (roomAvailability in roomAvailabilities) {
+        totalOccupancy = totalOccupancy + roomAvailability.occupiedBeds
+    }
+
+    var meanOccupancy = totalOccupancy / availabilityCount
+    var varianceSum = 0.0
+
+    for (roomAvailability in roomAvailabilities) {
+        var diff = roomAvailability.occupiedBeds - meanOccupancy
+        varianceSum = varianceSum + (diff * diff)
+    }
+
+    var variance = varianceSum / availabilityCount
+
+    if (variance == 0.0) {
+        return 0.0
+    }
+
+    var guess = variance
+    var i = 0
+
+    while (i < 20) {
+        guess = 0.5 * (guess + (variance / guess))
+        i = i + 1
+    }
+
+    return guess
 }

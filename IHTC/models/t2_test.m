@@ -1,16 +1,11 @@
 using "../ihtc.mm"
 
-
 hospital: HospitalInstance {
-    decisionHorizon = 5
+    decisionHorizon = 6
 }
 
 s1: Surgeon {
     id = 1
-}
-
-s2: Surgeon {
-    id = 2
 }
 
 r1: Room {
@@ -18,29 +13,17 @@ r1: Room {
     maxCapacity = 2
 }
 
-r2: Room {
-    id = 2
-    maxCapacity = 1
-}
-
 ot1: OperatingTheatre {
     id = 1
 }
 
-ot2: OperatingTheatre {
-    id = 2
-}
-
 hospital.surgeons -- s1
-hospital.surgeons -- s2
 hospital.rooms -- r1
-hospital.rooms -- r2
 hospital.operatingtheatres -- ot1
-hospital.operatingtheatres -- ot2
 
 p1: Patient {
     id = 1
-    isMandatory = true
+    isMandatory = false
     isScheduled = false
     dueDate = 4
     releaseDate = 1
@@ -50,105 +33,100 @@ p1: Patient {
     stayLength = 2
 }
 p1.assignedSurgeonId -- s1
+hospital.patients -- p1
 
 p2: Patient {
     id = 2
     isMandatory = false
-    isScheduled = true
+    isScheduled = false
     dueDate = 4
     releaseDate = 1
     ageGroup = AgeGroup.ADULT
-    surgeryDuration = 2
+    surgeryDuration = 1
     gender = Gender.F
-    stayLength = 2
+    stayLength = 3
 }
 p2.assignedSurgeonId -- s1
+hospital.patients -- p2
 
 p3: Patient {
     id = 3
     isMandatory = false
     isScheduled = false
-    dueDate = 5
-    releaseDate = 1
-    ageGroup = AgeGroup.ELDERLY
-    surgeryDuration = 4
-    gender = Gender.F
-    stayLength = 3
-}
-p3.assignedSurgeonId -- s2
-
-p4: Patient {
-    id = 4
-    isMandatory = false
-    isScheduled = false
-    dueDate = 5
+    dueDate = 4
     releaseDate = 1
     ageGroup = AgeGroup.ADULT
-    surgeryDuration = 1
-    gender = Gender.M
-    stayLength = 1
-}
-p4.assignedSurgeonId -- s2
-
-p5: Patient {
-    id = 5
-    isMandatory = false
-    isScheduled = false
-    dueDate = 3
-    releaseDate = 1
-    ageGroup = AgeGroup.CHILD
     surgeryDuration = 2
-    gender = Gender.F
-    stayLength = 1
+    gender = Gender.M
+    stayLength = 2
 }
-p5.assignedSurgeonId -- s1
-p5.incompatibleRooms -- r2
-
-hospital.patients -- p1
-hospital.patients -- p2
+p3.assignedSurgeonId -- s1
 hospital.patients -- p3
-hospital.patients -- p4
-hospital.patients -- p5
 
-sa1d1: SurgeonAvailability {
+sa1: SurgeonAvailability {
     day = 1
     maxOperatingTime = 4
 }
-sa1d1.surgeonId -- s1
+sa1.surgeonId -- s1
+hospital.surgeonAvailabilities -- sa1
 
-sa2d1: SurgeonAvailability {
+ota1: OperatingTheatreAvailability {
     day = 1
-    maxOperatingTime = 4
+    maxCapacity = 4
 }
-sa2d1.surgeonId -- s2
+ota1.operatingTheatreId -- ot1
+hospital.operatingTheatreAvailabilities -- ota1
 
-ota1d1: OperatingTheatreAvailability {
-    day = 1
-    maxCapacity = 3
+ra0: RoomAvailability {
+    day = 0
+    occupiedBeds = 0
+    ageGroup = AgeGroup.EMPTY
+    roomNumber = 1
 }
-ota1d1.operatingTheatreId -- ot1
+ra0.roomId -- r1
+hospital.roomAvailabilities -- ra0
 
-ota2d1: OperatingTheatreAvailability {
-    day = 1
-    maxCapacity = 2
-}
-ota2d1.operatingTheatreId -- ot2
-
-ra1d1: RoomAvailability {
+ra1: RoomAvailability {
     day = 1
     occupiedBeds = 0
+    ageGroup = AgeGroup.EMPTY
+    roomNumber = 1
 }
-ra1d1.roomId -- r1
+ra1.roomId -- r1
+hospital.roomAvailabilities -- ra1
 
-ra2d1: RoomAvailability {
-    day = 1
+ra2: RoomAvailability {
+    day = 2
     occupiedBeds = 0
+    ageGroup = AgeGroup.EMPTY
+    roomNumber = 1
 }
-ra2d1.roomId -- r2
+ra2.roomId -- r1
+hospital.roomAvailabilities -- ra2
 
-a1: Admission {
-    admissionDay = 1
+ra3: RoomAvailability {
+    day = 3
+    occupiedBeds = 0
+    ageGroup = AgeGroup.EMPTY
+    roomNumber = 1
 }
-a1.patientId -- p2
-a1.roomId -- r1
-a1.operationTheatreId -- ot1
+ra3.roomId -- r1
+hospital.roomAvailabilities -- ra3
+
+ra4: RoomAvailability {
+    day = 4
+    occupiedBeds = 0
+    ageGroup = AgeGroup.EMPTY
+    roomNumber = 1
+}
+ra4.roomId -- r1
+hospital.roomAvailabilities -- ra4
+
+ra5: RoomAvailability {
+    day = 5
+    occupiedBeds = 0
+    ageGroup = AgeGroup.EMPTY
+    roomNumber = 1
+}
+ra5.roomId -- r1
+hospital.roomAvailabilities -- ra5

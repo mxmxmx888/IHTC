@@ -1,16 +1,64 @@
 using "../ihtc.mm"
 
 match {
-    // Transformation 4: remove an admitted non-mandatory patient. This frees
-    // resources while only sacrificing an optional patient, which helps repair
-    // overloaded or low-quality schedules.
-    patient: Patient {}
+    // Transformation 4: remove a random non-mandatory admitted patient.
+    // Full-stay RoomAvailability is updated across the patient's whole stay.
+    patient: Patient {
+        isMandatory == false
+        isScheduled == true
+    }
+
+    room: Room {}
     delete admission: Admission {}
 
     delete admission.patientId -- patient
+    delete admission.roomId -- room
 
-    // Only optional patients can be removed by this move.
-    where patient.isMandatory == false
+    var startDay = admission.admissionDay
+    var endDay = startDay + patient.stayLength - 1
+    var chosenRoomNumber = room.id
+}
+
+match {
+    var updateDay = startDay
+}
+
+while (updateDay <= endDay) {
+    if match {
+        lastBedTarget: RoomAvailability {
+            roomNumber == chosenRoomNumber
+            day == updateDay
+            ageGroup == patient.ageGroup
+            occupiedBeds == 1
+            occupiedBeds = 0
+            ageGroup = AgeGroup.EMPTY
+        }
+
+        lastBedTarget.roomId -- room
+    } then {
+    } else {
+        match {
+            remainingBedTarget: RoomAvailability {
+                roomNumber == chosenRoomNumber
+                day == updateDay
+                ageGroup == patient.ageGroup
+                occupiedBeds > 1
+                occupiedBeds = remainingBedTarget.occupiedBeds - 1
+            }
+
+            remainingBedTarget.roomId -- room
+        }
+    }
+
+    match {
+        updateDay = updateDay + 1
+    }
+}
+
+match {
+    patient {
+        isScheduled = false
+    }
 }
 
 if match {

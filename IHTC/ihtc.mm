@@ -1,22 +1,20 @@
-enum Status{
-    SCHEDULED
-    POSTPONED
-}
+
 enum Gender {
     M
     F 
 }
-enum Priority {
-    MANDATORY
-    NON_MANDATORY
-}
 enum AgeGroup {
+    BABY
     CHILD
+    YOUNG
     ADULT
     ELDERLY
+    EMPTY
 }
 
-//siu 
+
+
+
 class HospitalInstance {
     decisionHorizon: int
 }
@@ -32,6 +30,7 @@ HospitalInstance.hospitalisationShifts[0..*] --> HospitalisationShift
 HospitalInstance.nurseWorkingShifts[0..*] --> NurseWorkingShift
 HospitalInstance.roomShiftAssignments[0..*] --> RoomShiftAssignment
 HospitalInstance.deletedAdmissionsTrackers[0..*] --> DeletedAdmissionsTracker
+
 
 
 class Patient {
@@ -95,13 +94,15 @@ OperatingTheatreAvailability.operatingTheatreId[1..1] --> OperatingTheatre
 class RoomAvailability {
     day: int
     occupiedBeds: int
+    ageGroup: AgeGroup
+    roomNumber: int
 }
 RoomAvailability.roomId[1..1] --> Room
-
 
 class HospitalisationShift {
     day: int
     shift: int
+    roomNumber: int
     workload: int
     skillLevelRequired: int
 }
@@ -128,7 +129,9 @@ RoomShiftAssignment.hospitalisationShift[1..1] --> HospitalisationShift
 
 class PatientDayDemand {
     relativeDay: int
+    shift: int
     workloadProduced: int
     skillLevelRequired: int
 }
 PatientDayDemand.patient[1..1] --> Patient
+

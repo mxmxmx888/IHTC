@@ -1,53 +1,176 @@
 using "../ihtc.mm"
 
-hospital: HospitalInstance { decisionHorizon = 4 }
+hospital: HospitalInstance {
+    decisionHorizon = 6
+}
 
-s1: Surgeon { id = 1 }
+s1: Surgeon {
+    id = 1
+}
 
-r1: Room { id = 1 maxCapacity = 2 }
-r2: Room { id = 2 maxCapacity = 2 }
+r1: Room {
+    id = 1
+    maxCapacity = 2
+}
 
-ot1: OperatingTheatre { id = 1 }
-ot2: OperatingTheatre { id = 2 }
+r2: Room {
+    id = 2
+    maxCapacity = 2
+}
 
-p1: Patient { id = 1 isMandatory = false isScheduled = true dueDate = 3 releaseDate = 1 ageGroup = AgeGroup.ADULT surgeryDuration = 1 gender = Gender.M stayLength = 2 }
+ot1: OperatingTheatre {
+    id = 1
+}
 
-hospital.patients -- p1
+ot2: OperatingTheatre {
+    id = 2
+}
+
+hospital.surgeons -- s1
 hospital.rooms -- r1
 hospital.rooms -- r2
-hospital.surgeons -- s1
 hospital.operatingtheatres -- ot1
 hospital.operatingtheatres -- ot2
 
+p1: Patient {
+    id = 1
+    isMandatory = false
+    isScheduled = true
+    dueDate = 4
+    releaseDate = 1
+    ageGroup = AgeGroup.ADULT
+    surgeryDuration = 1
+    gender = Gender.M
+    stayLength = 2
+}
 p1.assignedSurgeonId -- s1
+hospital.patients -- p1
 
-a1: Admission { admissionDay = 1 }
+a1: Admission {
+    admissionDay = 1
+}
 a1.patientId -- p1
 a1.roomId -- r1
 a1.operationTheatreId -- ot1
 
-sa1d1: SurgeonAvailability { day = 1 maxOperatingTime = 2 }
-sa1d2: SurgeonAvailability { day = 2 maxOperatingTime = 2 }
+sa1: SurgeonAvailability {
+    day = 3
+    maxOperatingTime = 3
+}
+sa1.surgeonId -- s1
+hospital.surgeonAvailabilities -- sa1
 
-sa1d1.surgeonId -- s1
-sa1d2.surgeonId -- s1
+ota2: OperatingTheatreAvailability {
+    day = 3
+    maxCapacity = 3
+}
+ota2.operatingTheatreId -- ot2
+hospital.operatingTheatreAvailabilities -- ota2
 
-ota1d1: OperatingTheatreAvailability { day = 1 maxCapacity = 2 }
-ota1d2: OperatingTheatreAvailability { day = 2 maxCapacity = 2 }
-ota2d1: OperatingTheatreAvailability { day = 1 maxCapacity = 2 }
-ota2d2: OperatingTheatreAvailability { day = 2 maxCapacity = 2 }
+oldRa0: RoomAvailability {
+    day = 0
+    occupiedBeds = 0
+    ageGroup = AgeGroup.EMPTY
+    roomNumber = 1
+}
+oldRa0.roomId -- r1
+hospital.roomAvailabilities -- oldRa0
 
-ota1d1.operatingTheatreId -- ot1
-ota1d2.operatingTheatreId -- ot1
-ota2d1.operatingTheatreId -- ot2
-ota2d2.operatingTheatreId -- ot2
+oldRa1: RoomAvailability {
+    day = 1
+    occupiedBeds = 1
+    ageGroup = AgeGroup.ADULT
+    roomNumber = 1
+}
+oldRa1.roomId -- r1
+hospital.roomAvailabilities -- oldRa1
 
-ra1d1: RoomAvailability { day = 1 occupiedBeds = 1 }
-ra1d2: RoomAvailability { day = 2 occupiedBeds = 0 }
-ra2d1: RoomAvailability { day = 1 occupiedBeds = 0 }
-ra2d2: RoomAvailability { day = 2 occupiedBeds = 0 }
+oldRa2: RoomAvailability {
+    day = 2
+    occupiedBeds = 1
+    ageGroup = AgeGroup.ADULT
+    roomNumber = 1
+}
+oldRa2.roomId -- r1
+hospital.roomAvailabilities -- oldRa2
 
-ra1d1.roomId -- r1
-ra1d2.roomId -- r1
-ra2d1.roomId -- r2
-ra2d2.roomId -- r2
+oldRa3: RoomAvailability {
+    day = 3
+    occupiedBeds = 0
+    ageGroup = AgeGroup.EMPTY
+    roomNumber = 1
+}
+oldRa3.roomId -- r1
+hospital.roomAvailabilities -- oldRa3
+
+oldRa4: RoomAvailability {
+    day = 4
+    occupiedBeds = 0
+    ageGroup = AgeGroup.EMPTY
+    roomNumber = 1
+}
+oldRa4.roomId -- r1
+hospital.roomAvailabilities -- oldRa4
+
+oldRa5: RoomAvailability {
+    day = 5
+    occupiedBeds = 0
+    ageGroup = AgeGroup.EMPTY
+    roomNumber = 1
+}
+oldRa5.roomId -- r1
+hospital.roomAvailabilities -- oldRa5
+
+newRa0: RoomAvailability {
+    day = 0
+    occupiedBeds = 0
+    ageGroup = AgeGroup.EMPTY
+    roomNumber = 2
+}
+newRa0.roomId -- r2
+hospital.roomAvailabilities -- newRa0
+
+newRa1: RoomAvailability {
+    day = 1
+    occupiedBeds = 0
+    ageGroup = AgeGroup.EMPTY
+    roomNumber = 2
+}
+newRa1.roomId -- r2
+hospital.roomAvailabilities -- newRa1
+
+newRa2: RoomAvailability {
+    day = 2
+    occupiedBeds = 0
+    ageGroup = AgeGroup.EMPTY
+    roomNumber = 2
+}
+newRa2.roomId -- r2
+hospital.roomAvailabilities -- newRa2
+
+newRa3: RoomAvailability {
+    day = 3
+    occupiedBeds = 0
+    ageGroup = AgeGroup.EMPTY
+    roomNumber = 2
+}
+newRa3.roomId -- r2
+hospital.roomAvailabilities -- newRa3
+
+newRa4: RoomAvailability {
+    day = 4
+    occupiedBeds = 0
+    ageGroup = AgeGroup.EMPTY
+    roomNumber = 2
+}
+newRa4.roomId -- r2
+hospital.roomAvailabilities -- newRa4
+
+newRa5: RoomAvailability {
+    day = 5
+    occupiedBeds = 0
+    ageGroup = AgeGroup.EMPTY
+    roomNumber = 2
+}
+newRa5.roomId -- r2
+hospital.roomAvailabilities -- newRa5
