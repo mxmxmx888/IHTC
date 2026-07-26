@@ -1,10 +1,17 @@
 using "../ihtc.mm"
 
+// T2: Admit the shortest-surgery optional patient that is not yet scheduled.
+// It uses the same feasibility checks and full-stay room occupancy update as
+// T1, but selects the easiest optional patient to fit first.
 match {
-    // Transformation 2: admit the non-mandatory unscheduled patient with the
-    // smallest surgery duration. The rest of the move follows the same full-stay
-    // RoomAvailability validation and update logic as T1.
     hospital: HospitalInstance {}
+
+    state: OptimisationState {
+        phase == OptimisationPhase.PATIENTS
+    }
+
+    hospital.optimisationState -- state
+
 
     patient: Patient {
         isMandatory == false
@@ -57,6 +64,8 @@ match {
     var checkDay = startDay
 }
 
+// Check each day of the stay for spare capacity and age-group compatibility.
+// A failed day makes the whole candidate admission invalid.
 while (checkDay <= endDay) {
     if match {
         stayCheckEmpty: RoomAvailability {
@@ -89,6 +98,7 @@ match {
     var updateDay = startDay
 }
 
+// Apply the room occupancy change across the validated stay interval.
 while (updateDay <= endDay) {
     if match {
         emptyDayTarget: RoomAvailability {
@@ -120,6 +130,8 @@ while (updateDay <= endDay) {
 }
 
 match {
+    // Mark the selected patient scheduled and create the corresponding
+    // admission after all room-day updates have succeeded.
     patient {
         isScheduled = true
     }
@@ -131,4 +143,5 @@ match {
     create admission.patientId -- patient
     create admission.roomId -- room
     create admission.operationTheatreId -- theatre
+    create hospital.admissions -- admission
 }

@@ -97,3 +97,4 @@ ra5: RoomAvailability {
 }
 ra5.roomId -- r1
 hospital.roomAvailabilities -- ra5
+hospital.admissions -- a1

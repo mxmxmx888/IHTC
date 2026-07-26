@@ -1,8 +1,16 @@
 using "../ihtc.mm"
 
+// T6: Swap one optional scheduled patient for a different optional unscheduled
+// patient. It releases the old full stay, records the removal, then validates
+// and occupies a feasible stay for the replacement.
 match {
-    // Transformation 6: remove one admitted non-mandatory patient, then admit
-    // a different non-mandatory unscheduled patient.
+    hospital: HospitalInstance {}
+
+    state: OptimisationState {
+        phase == OptimisationPhase.PATIENTS
+    }
+
+    hospital.optimisationState -- state
     oldPatient: Patient {
         isMandatory == false
         isScheduled == true
@@ -15,6 +23,7 @@ match {
     delete oldAdmission.patientId -- oldPatient
     delete oldAdmission.roomId -- oldRoom
     delete oldAdmission.operationTheatreId -- oldTheatre
+    delete hospital.admissions -- oldAdmission
 
     var oldStartDay = oldAdmission.admissionDay
     var oldEndDay = oldStartDay + oldPatient.stayLength - 1
@@ -25,6 +34,7 @@ match {
     var oldUpdateDay = oldStartDay
 }
 
+// Release the removed patient's bed across their complete former stay.
 while (oldUpdateDay <= oldEndDay) {
     if match {
         lastBedTarget: RoomAvailability {
@@ -58,11 +68,13 @@ while (oldUpdateDay <= oldEndDay) {
 }
 
 match {
+    // Mark the removed patient as available to schedule again.
     oldPatient {
         isScheduled = false
     }
 }
 
+// Count the deletion before adding the replacement admission.
 if match {
     existingTrackerCheck: DeletedAdmissionsTracker {}
 } then {
@@ -80,8 +92,8 @@ if match {
 }
 
 match {
-    hospital: HospitalInstance {}
-
+    // Select a different optional patient and a feasible resource combination
+    // for the replacement admission.
     newPatient: Patient {
         isMandatory == false
         isScheduled == false
@@ -123,6 +135,7 @@ match {
     var checkDay = newStartDay
 }
 
+// Validate every day of the replacement stay for capacity and age compatibility.
 while (checkDay <= newEndDay) {
     if match {
         stayCheckEmpty: RoomAvailability {
@@ -155,6 +168,7 @@ match {
     var newUpdateDay = newStartDay
 }
 
+// Add the replacement patient to every RoomAvailability record in their stay.
 while (newUpdateDay <= newEndDay) {
     if match {
         emptyDayTarget: RoomAvailability {
@@ -186,6 +200,7 @@ while (newUpdateDay <= newEndDay) {
 }
 
 match {
+    // Finalise the replacement only after its full room stay has been updated.
     newPatient {
         isScheduled = true
     }
@@ -197,4 +212,5 @@ match {
     create newAdmission.patientId -- newPatient
     create newAdmission.roomId -- newRoom
     create newAdmission.operationTheatreId -- theatre
+    create hospital.admissions -- newAdmission
 }

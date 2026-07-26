@@ -1,11 +1,17 @@
 using "../ihtc.mm"
 
+// T3: Admit an optional unscheduled patient using the earliest available
+// surgeon day, with a compatible room and available theatre on that day.
+// The whole stay is validated before its room occupancy is recorded.
 match {
-    // Transformation 3: find the earliest available surgeon, then find a
-    // theatre and room on the same day, and admit a compatible non-mandatory
-    // unscheduled patient. Full-stay RoomAvailability is validated and updated
-    // in the same way as T1 and T2.
     hospital: HospitalInstance {}
+
+    state: OptimisationState {
+        phase == OptimisationPhase.PATIENTS
+    }
+
+    hospital.optimisationState -- state
+
 
     patient: Patient {
         isMandatory == false
@@ -46,7 +52,7 @@ match {
     where patient.surgeryDuration <= surgeonAvailability.maxOperatingTime
     where theatreAvailability.maxCapacity > 0
 
-    // Pick the earliest surgeon availability in the model.
+    // Select the earliest surgeon availability with positive operating time.
     where hospital.surgeonAvailabilities.all((other) =>
         other == surgeonAvailability ||
         other.maxOperatingTime == 0 ||
@@ -58,6 +64,8 @@ match {
     var checkDay = startDay
 }
 
+// Check every room day in the stay. The room must be empty or contain only the
+// same age group, and it must have at least one free bed.
 while (checkDay <= endDay) {
     if match {
         stayCheckEmpty: RoomAvailability {
@@ -90,6 +98,7 @@ match {
     var updateDay = startDay
 }
 
+// Record the patient in RoomAvailability for each day of the validated stay.
 while (updateDay <= endDay) {
     if match {
         emptyDayTarget: RoomAvailability {
@@ -121,6 +130,7 @@ while (updateDay <= endDay) {
 }
 
 match {
+    // Finalise the selected admission after the room interval has been updated.
     patient {
         isScheduled = true
     }
@@ -132,4 +142,5 @@ match {
     create admission.patientId -- patient
     create admission.roomId -- room
     create admission.operationTheatreId -- theatre
+    create hospital.admissions -- admission
 }

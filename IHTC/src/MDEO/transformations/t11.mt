@@ -1,10 +1,17 @@
 using "../ihtc.mm"
 
+// T11: Make a joint room, day, and theatre reassignment for one scheduled
+// patient. The rule releases the old room interval, validates the full target
+// interval, records the new occupancy, and then updates all three links.
 match {
-    // Transformation 11: change a patient's room, admission day, and theatre.
-    // This combines full old-interval removal with full new-interval validation
-    // and insertion in the new room.
     hospital: HospitalInstance {}
+
+    state: OptimisationState {
+        phase == OptimisationPhase.PATIENTS
+    }
+
+    hospital.optimisationState -- state
+
 
     patient: Patient {
         isScheduled == true
@@ -59,6 +66,7 @@ match {
     var removeDay = oldStartDay
 }
 
+// Release occupancy for every day of the patient's original room stay.
 while (removeDay <= oldEndDay) {
     if match {
         lastBedTarget: RoomAvailability {
@@ -91,6 +99,7 @@ match {
     var checkDay = newStartDay
 }
 
+// Validate every day in the proposed room and day interval before mutating it.
 while (checkDay <= newEndDay) {
     if match {
         stayCheckEmpty: RoomAvailability {
@@ -123,6 +132,7 @@ match {
     var addDay = newStartDay
 }
 
+// Add the patient to each room-day record in the validated new interval.
 while (addDay <= newEndDay) {
     if match {
         emptyDayTarget: RoomAvailability {
@@ -150,6 +160,7 @@ while (addDay <= newEndDay) {
 }
 
 match {
+    // Commit the new day, room, and theatre after all room occupancy changes.
     admission {
         admissionDay = newStartDay
     }

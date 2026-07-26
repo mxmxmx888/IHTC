@@ -35,3 +35,4 @@ ota2d1.operatingTheatreId -- ot2
 
 ra1d1: RoomAvailability { day = 1 occupiedBeds = 1 }
 ra1d1.roomId -- r1
+hospital.admissions -- a1

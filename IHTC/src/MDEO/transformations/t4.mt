@@ -1,8 +1,15 @@
 using "../ihtc.mm"
 
+// T4: Remove one optional scheduled patient. The rule releases their room bed
+// on every day of their stay, marks them unscheduled, and records the removal.
 match {
-    // Transformation 4: remove a random non-mandatory admitted patient.
-    // Full-stay RoomAvailability is updated across the patient's whole stay.
+    hospital: HospitalInstance {}
+
+    state: OptimisationState {
+        phase == OptimisationPhase.PATIENTS
+    }
+
+    hospital.optimisationState -- state
     patient: Patient {
         isMandatory == false
         isScheduled == true
@@ -13,6 +20,7 @@ match {
 
     delete admission.patientId -- patient
     delete admission.roomId -- room
+    delete hospital.admissions -- admission
 
     var startDay = admission.admissionDay
     var endDay = startDay + patient.stayLength - 1
@@ -23,6 +31,8 @@ match {
     var updateDay = startDay
 }
 
+// Release one occupied bed for every day of the removed patient's stay. When
+// the last bed is released, the room day becomes EMPTY again.
 while (updateDay <= endDay) {
     if match {
         lastBedTarget: RoomAvailability {
@@ -56,11 +66,13 @@ while (updateDay <= endDay) {
 }
 
 match {
+    // Keep the patient available for a later admission move.
     patient {
         isScheduled = false
     }
 }
 
+// Maintain the deletion counter used by the removed-patients objective.
 if match {
     existingTrackerCheck: DeletedAdmissionsTracker {}
 } then {

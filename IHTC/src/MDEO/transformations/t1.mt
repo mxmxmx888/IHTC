@@ -1,11 +1,17 @@
 using "../ihtc.mm"
 
+// T1: Admit an optional unscheduled patient to a feasible day, room, and
+// theatre. The rule checks the whole stay before creating the admission and
+// then records the patient's occupancy for every day of that stay.
 match {
-    // Transformation 1: admit a non-mandatory patient by assigning a feasible
-    // day, room, and theatre. This version uses RoomAvailability.roomNumber
-    // as a scalar workaround and validates the whole stay interval before
-    // updating room availability and creating the admission.
     hospital: HospitalInstance {}
+
+    state: OptimisationState {
+        phase == OptimisationPhase.PATIENTS
+    }
+
+    hospital.optimisationState -- state
+
 
     patient: Patient {
         isMandatory == false
@@ -47,6 +53,8 @@ match {
     var checkDay = startDay
 }
 
+// Validate every day of the proposed stay. A room day must either be empty or
+// already contain the same age group with spare capacity; otherwise abort.
 while (checkDay <= endDay) {
     if match {
         stayCheckEmpty: RoomAvailability {
@@ -79,6 +87,8 @@ match {
     var updateDay = startDay
 }
 
+// Commit the occupancy for every validated day. An empty room day adopts the
+// patient's age group; an existing compatible room day only gains one bed.
 while (updateDay <= endDay) {
     if match {
         emptyDayTarget: RoomAvailability {
@@ -110,6 +120,8 @@ while (updateDay <= endDay) {
 }
 
 match {
+    // Create the admission only after the full stay has been validated and
+    // reflected in RoomAvailability.
     patient {
         isScheduled = true
     }
@@ -121,4 +133,5 @@ match {
     create admission.patientId -- patient
     create admission.roomId -- room
     create admission.operationTheatreId -- theatre
+    create hospital.admissions -- admission
 }

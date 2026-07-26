@@ -1,216 +1,78 @@
 using "../ihtc.mm"
 
+// T16: Move a nurse from one room-day-shift slot to another active slot in a
+// different room during the nurse phase. The target must match the nurse's
+// working shift and all demand in it must be within the nurse's skill level.
 match {
-    // Transformation 16: remove a nurse from one room-shift assignment and
-    // assign the same nurse to another compatible room-shift.
-
     hospital: HospitalInstance {}
 
-    nurse: Nurse {}
-    oldShift: HospitalisationShift {}
-    oldRoom: Room {}
-
-    delete oldRSA: RoomShiftAssignment {}
-
-    targetPatient: Patient {
-        isScheduled == true
+    state: OptimisationState {
+        phase == OptimisationPhase.NURSES
     }
 
-    targetAdmission: Admission {}
-    targetRoom: Room {}
-    targetDemand: PatientDayDemand {}
-    nws: NurseWorkingShift {}
+    nurse: Nurse {}
+    nurseWorkingShift: NurseWorkingShift {}
+    oldShift: HospitalisationShift {}
+    newShift: HospitalisationShift {}
+    oldRoom: Room {}
+    newRoom: Room {}
 
-    delete oldRSA.nurse -- nurse
-    delete oldRSA.hospitalisationShift -- oldShift
+    patient: Patient {}
+    admission: Admission {}
+    demand: PatientDayDemand {}
+
+    delete oldAssignment: RoomShiftAssignment {}
+    forbid existingNewAssignment: RoomShiftAssignment {}
+
+    hospital.optimisationState -- state
+    nurseWorkingShift.nurse -- nurse
     oldShift.room -- oldRoom
+    newShift.room -- newRoom
 
-    targetAdmission.patientId -- targetPatient
-    targetAdmission.roomId -- targetRoom
-    targetPatient.dayDemand -- targetDemand
-    nws.nurse -- nurse
+    delete oldAssignment.nurse -- nurse
+    delete oldAssignment.hospitalisationShift -- oldShift
 
-    var targetDay = targetAdmission.admissionDay + targetDemand.relativeDay
-    var targetShift = targetDemand.shift
-    var targetRoomNumber = targetRoom.id
+    hospital.admissions -- admission
+    admission.patientId -- patient
+    admission.roomId -- newRoom
+    patient.dayDemand -- demand
 
-    where targetRoom != oldRoom
-    where nws.day == targetDay
-    where nws.shift == targetShift
-    where targetDay < hospital.decisionHorizon
-    where nurse.skillLevel >= targetDemand.skillLevelRequired
+    forbid existingNewAssignment.hospitalisationShift -- newShift
+
+    where oldShift != newShift
+    where oldRoom != newRoom
+    where nurseWorkingShift.day == newShift.day
+    where nurseWorkingShift.shift == newShift.shift
+    where admission.admissionDay + demand.relativeDay == newShift.day
+    where demand.shift == newShift.shift
 }
 
+// Examine every demand contributing to the target slot. A single demand above
+// the nurse's skill level invalidates the complete reassignment.
 if match {
-    existingShiftGate: HospitalisationShift {
-        day == targetDay
-        shift == targetShift
-        roomNumber == targetRoomNumber
+    conflictingPatient: Patient {}
+    conflictingAdmission: Admission {}
+
+    conflictingDemand: PatientDayDemand {
+        skillLevelRequired > nurse.skillLevel
     }
+
+    hospital.admissions -- conflictingAdmission
+    conflictingAdmission.patientId -- conflictingPatient
+    conflictingAdmission.roomId -- newRoom
+    conflictingPatient.dayDemand -- conflictingDemand
+
+    where conflictingAdmission.admissionDay + conflictingDemand.relativeDay == newShift.day
+    where conflictingDemand.shift == newShift.shift
 } then {
-    if match {
-        shiftAlreadyHasPatientGate: HospitalisationShift {
-            day == targetDay
-            shift == targetShift
-            roomNumber == targetRoomNumber
-        }
-
-        shiftAlreadyHasPatientGate.patient -- targetPatient
-    } then {
-        if match {
-            existingAssignmentGateA: RoomShiftAssignment {}
-            existingAssignmentShiftA: HospitalisationShift {
-                day == targetDay
-                shift == targetShift
-                roomNumber == targetRoomNumber
-            }
-
-            existingAssignmentGateA.nurse -- nurse
-            existingAssignmentGateA.hospitalisationShift -- existingAssignmentShiftA
-        } then {
-            kill
-        } else {
-            match {
-                assignOnlyShiftA: HospitalisationShift {
-                    day == targetDay
-                    shift == targetShift
-                    roomNumber == targetRoomNumber
-                }
-
-                where nurse.skillLevel >= assignOnlyShiftA.skillLevelRequired
-                where nws.maxLoad >= assignOnlyShiftA.workload
-
-                create rsaAssignOnlyA: RoomShiftAssignment {}
-                create rsaAssignOnlyA.nurse -- nurse
-                create rsaAssignOnlyA.hospitalisationShift -- assignOnlyShiftA
-                create hospital.roomShiftAssignments -- rsaAssignOnlyA
-            }
-        }
-    } else {
-        if match {
-            higherSkillGateB: HospitalisationShift {
-                day == targetDay
-                shift == targetShift
-                roomNumber == targetRoomNumber
-                skillLevelRequired < targetDemand.skillLevelRequired
-            }
-        } then {
-            if match {
-                existingAssignmentGateB: RoomShiftAssignment {}
-                existingAssignmentShiftB: HospitalisationShift {
-                    day == targetDay
-                    shift == targetShift
-                    roomNumber == targetRoomNumber
-                    skillLevelRequired < targetDemand.skillLevelRequired
-                }
-
-                existingAssignmentGateB.nurse -- nurse
-                existingAssignmentGateB.hospitalisationShift -- existingAssignmentShiftB
-            } then {
-                match {
-                    higherSkillUpdateNoRsaB: HospitalisationShift {
-                        day == targetDay
-                        shift == targetShift
-                        roomNumber == targetRoomNumber
-                        skillLevelRequired < targetDemand.skillLevelRequired
-                        workload = higherSkillUpdateNoRsaB.workload + targetDemand.workloadProduced
-                        skillLevelRequired = targetDemand.skillLevelRequired
-                    }
-
-                    where nurse.skillLevel >= targetDemand.skillLevelRequired
-                    where nws.maxLoad >= higherSkillUpdateNoRsaB.workload + targetDemand.workloadProduced
-
-                    create higherSkillUpdateNoRsaB.patient -- targetPatient
-                }
-            } else {
-                match {
-                    higherSkillUpdateWithRsaB: HospitalisationShift {
-                        day == targetDay
-                        shift == targetShift
-                        roomNumber == targetRoomNumber
-                        skillLevelRequired < targetDemand.skillLevelRequired
-                        workload = higherSkillUpdateWithRsaB.workload + targetDemand.workloadProduced
-                        skillLevelRequired = targetDemand.skillLevelRequired
-                    }
-
-                    where nurse.skillLevel >= targetDemand.skillLevelRequired
-                    where nws.maxLoad >= higherSkillUpdateWithRsaB.workload + targetDemand.workloadProduced
-
-                    create higherSkillUpdateWithRsaB.patient -- targetPatient
-
-                    create rsaHigherB: RoomShiftAssignment {}
-                    create rsaHigherB.nurse -- nurse
-                    create rsaHigherB.hospitalisationShift -- higherSkillUpdateWithRsaB
-                    create hospital.roomShiftAssignments -- rsaHigherB
-                }
-            }
-        } else {
-            if match {
-                existingAssignmentGateC: RoomShiftAssignment {}
-                existingAssignmentShiftC: HospitalisationShift {
-                    day == targetDay
-                    shift == targetShift
-                    roomNumber == targetRoomNumber
-                    skillLevelRequired >= targetDemand.skillLevelRequired
-                }
-
-                existingAssignmentGateC.nurse -- nurse
-                existingAssignmentGateC.hospitalisationShift -- existingAssignmentShiftC
-            } then {
-                match {
-                    enoughSkillUpdateNoRsaC: HospitalisationShift {
-                        day == targetDay
-                        shift == targetShift
-                        roomNumber == targetRoomNumber
-                        skillLevelRequired >= targetDemand.skillLevelRequired
-                        workload = enoughSkillUpdateNoRsaC.workload + targetDemand.workloadProduced
-                    }
-
-                    where nurse.skillLevel >= enoughSkillUpdateNoRsaC.skillLevelRequired
-                    where nws.maxLoad >= enoughSkillUpdateNoRsaC.workload + targetDemand.workloadProduced
-
-                    create enoughSkillUpdateNoRsaC.patient -- targetPatient
-                }
-            } else {
-                match {
-                    enoughSkillUpdateWithRsaC: HospitalisationShift {
-                        day == targetDay
-                        shift == targetShift
-                        roomNumber == targetRoomNumber
-                        skillLevelRequired >= targetDemand.skillLevelRequired
-                        workload = enoughSkillUpdateWithRsaC.workload + targetDemand.workloadProduced
-                    }
-
-                    where nurse.skillLevel >= enoughSkillUpdateWithRsaC.skillLevelRequired
-                    where nws.maxLoad >= enoughSkillUpdateWithRsaC.workload + targetDemand.workloadProduced
-
-                    create enoughSkillUpdateWithRsaC.patient -- targetPatient
-
-                    create rsaEnoughC: RoomShiftAssignment {}
-                    create rsaEnoughC.nurse -- nurse
-                    create rsaEnoughC.hospitalisationShift -- enoughSkillUpdateWithRsaC
-                    create hospital.roomShiftAssignments -- rsaEnoughC
-                }
-            }
-        }
-    }
+    kill
 } else {
-    match {
-        create shiftNewD: HospitalisationShift {
-            day = targetDay
-            shift = targetShift
-            roomNumber = targetRoomNumber
-            workload = targetDemand.workloadProduced
-            skillLevelRequired = targetDemand.skillLevelRequired
-        }
+}
 
-        create hospital.hospitalisationShifts -- shiftNewD
-        create shiftNewD.room -- targetRoom
-        create shiftNewD.patient -- targetPatient
-
-        create rsaNewD: RoomShiftAssignment {}
-        create rsaNewD.nurse -- nurse
-        create rsaNewD.hospitalisationShift -- shiftNewD
-        create hospital.roomShiftAssignments -- rsaNewD
-    }
+match {
+    // Replace the old assignment only after the target slot passes skill checks.
+    create newAssignment: RoomShiftAssignment {}
+    create newAssignment.nurse -- nurse
+    create newAssignment.hospitalisationShift -- newShift
+    create hospital.roomShiftAssignments -- newAssignment
 }

@@ -46,3 +46,5 @@ shift1: HospitalisationShift { day = 1 shift = 0 roomNumber = 1 workload = 2 ski
 shift1.room -- r1
 shift1.patient -- p0
 hospital.hospitalisationShifts -- shift1
+hospital.admissions -- a0
+hospital.admissions -- a1

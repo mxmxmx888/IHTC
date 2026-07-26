@@ -1,9 +1,75 @@
 using "./ihtc.mm"
 
+// Counts scheduled patients.
 fun admittedPatientsAmount(): int {
     return Admission.all().size()
 }
 
+// Penalises unscheduled patients, weighted toward mandatory patients.
+fun unscheduledPatientsPenalty(): int {
+    var penalty = 0
+    var patients = Patient.all()
+
+    for (patient in patients) {
+        var matchingAdmissions = Admission.all().filter((admission) =>
+            admission.patientId == patient
+        )
+
+        if (matchingAdmissions.size() == 0) {
+            if (patient.isMandatory == true) {
+                penalty = penalty + 1000
+            } else {
+                penalty = penalty + 100
+            }
+        }
+    }
+
+    return penalty
+}
+
+// Checks whether every mandatory patient is admitted.
+fun mandatoryPatientsAdmitted(): boolean {
+    for (patient in Patient.all()) {
+        if (patient.isMandatory == true) {
+            var admissions = Admission.all().filter((admission) =>
+                admission.patientId == patient
+            )
+
+            if (admissions.size() == 0) {
+                return false
+            }
+        }
+    }
+
+    return true
+}
+
+// Penalises invalid patient-to-nurse phase states.
+fun nurseAssignmentPhaseConsistency(): int {
+    var state = OptimisationState.first()
+
+    if (state.phase == OptimisationPhase.PATIENTS) {
+        return RoomShiftAssignment.all().size() + 1
+    }
+
+    var missingMandatoryAdmissions = 0
+
+    for (patient in Patient.all()) {
+        if (patient.isMandatory == true) {
+            var admissions = Admission.all().filter((admission) =>
+                admission.patientId == patient
+            )
+
+            if (admissions.size() == 0) {
+                missingMandatoryAdmissions = missingMandatoryAdmissions + 1
+            }
+        }
+    }
+
+    return missingMandatoryAdmissions
+}
+
+// Sums room-day capacity excess.
 fun roomCapacityViolation(): int {
     var totalCapacityViolation = 0
     var roomAvailabilities = RoomAvailability.all()
@@ -21,6 +87,7 @@ fun roomCapacityViolation(): int {
     return totalCapacityViolation
 }
 
+// Counts mandatory patients without admissions.
 fun removedPatients(): int {
     var removedCount = 0
     var patients = Patient.all()
@@ -40,6 +107,7 @@ fun removedPatients(): int {
     return removedCount
 }
 
+// Sums theatre operating-time capacity excess.
 fun theatreCapacityViolation(): int {
     var totalCapacityViolation = 0
     var theatreAvailabilities = OperatingTheatreAvailability.all()
@@ -67,6 +135,7 @@ fun theatreCapacityViolation(): int {
     return totalCapacityViolation
 }
 
+// Sums surgeon operating-time capacity excess.
 fun surgeonCapacityViolation(): int {
     var totalCapacityViolation = 0
     var surgeonAvailabilities = SurgeonAvailability.all()
@@ -94,33 +163,61 @@ fun surgeonCapacityViolation(): int {
     return totalCapacityViolation
 }
 
+// Sums nurse skill shortfalls for assigned slots.
 fun totalSkillLevelViolation(): int {
     var totalViolation = 0
-    var assignments = RoomShiftAssignment.all()
 
-    for (assignment in assignments) {
-        var nurse = assignment.nurse
+    for (assignment in RoomShiftAssignment.all()) {
+        var requiredSkill = 0
         var shift = assignment.hospitalisationShift
 
-        if (nurse.skillLevel < shift.skillLevelRequired) {
-            totalViolation = totalViolation + (shift.skillLevelRequired - nurse.skillLevel)
+        for (demand in PatientDayDemand.all()) {
+            var contributingAdmissions = Admission.all().filter((admission) =>
+                admission.patientId == demand.patient &&
+                admission.roomId == shift.room &&
+                admission.admissionDay + demand.relativeDay == shift.day &&
+                demand.shift == shift.shift
+            )
+
+            if (contributingAdmissions.size() > 0 && demand.skillLevelRequired > requiredSkill) {
+                requiredSkill = demand.skillLevelRequired
+            }
+        }
+
+        if (assignment.nurse.skillLevel < requiredSkill) {
+            totalViolation = totalViolation + (requiredSkill - assignment.nurse.skillLevel)
         }
     }
 
     return totalViolation
 }
 
+// Counts active room-shift slots with nurse cover.
 fun RoomShiftCoverage(): int {
     var coveredShiftCount = 0
-    var shifts = HospitalisationShift.all()
 
-    for (shift in shifts) {
-        if (shift.workload > 0) {
-            var matchingAssignments = RoomShiftAssignment.all().filter((assignment) =>
+    for (shift in HospitalisationShift.all()) {
+        var workload = 0
+
+        for (demand in PatientDayDemand.all()) {
+            var contributingAdmissions = Admission.all().filter((admission) =>
+                admission.patientId == demand.patient &&
+                admission.roomId == shift.room &&
+                admission.admissionDay + demand.relativeDay == shift.day &&
+                demand.shift == shift.shift
+            )
+
+            if (contributingAdmissions.size() > 0) {
+                workload = workload + demand.workloadProduced
+            }
+        }
+
+        if (workload > 0) {
+            var assignments = RoomShiftAssignment.all().filter((assignment) =>
                 assignment.hospitalisationShift == shift
             )
 
-            if (matchingAssignments.size() > 0) {
+            if (assignments.size() > 0) {
                 coveredShiftCount = coveredShiftCount + 1
             }
         }
@@ -129,6 +226,117 @@ fun RoomShiftCoverage(): int {
     return coveredShiftCount
 }
 
+// Counts active room-shift slots without nurse cover.
+fun uncoveredRoomShiftViolation(): int {
+    var uncoveredShiftCount = 0
+
+    for (shift in HospitalisationShift.all()) {
+        var workload = 0
+
+        for (demand in PatientDayDemand.all()) {
+            var contributingAdmissions = Admission.all().filter((admission) =>
+                admission.patientId == demand.patient &&
+                admission.roomId == shift.room &&
+                admission.admissionDay + demand.relativeDay == shift.day &&
+                demand.shift == shift.shift
+            )
+
+            if (contributingAdmissions.size() > 0) {
+                workload = workload + demand.workloadProduced
+            }
+        }
+
+        if (workload > 0) {
+            var assignments = RoomShiftAssignment.all().filter((assignment) =>
+                assignment.hospitalisationShift == shift
+            )
+
+            if (assignments.size() == 0) {
+                uncoveredShiftCount = uncoveredShiftCount + 1
+            }
+        }
+    }
+
+    return uncoveredShiftCount
+}
+
+// Sums workload on active room-shift slots without nurse cover.
+fun uncoveredWorkloadViolation(): int {
+    var totalUncoveredWorkload = 0
+
+    for (shift in HospitalisationShift.all()) {
+        var slotWorkload = 0
+
+        for (demand in PatientDayDemand.all()) {
+            var contributingAdmissions = Admission.all().filter((admission) =>
+                admission.patientId == demand.patient &&
+                admission.roomId == shift.room &&
+                admission.admissionDay + demand.relativeDay == shift.day &&
+                demand.shift == shift.shift
+            )
+
+            if (contributingAdmissions.size() > 0) {
+                slotWorkload = slotWorkload + demand.workloadProduced
+            }
+        }
+
+        var assignments = RoomShiftAssignment.all().filter((assignment) =>
+            assignment.hospitalisationShift == shift
+        )
+
+        if (slotWorkload > 0 && assignments.size() == 0) {
+            totalUncoveredWorkload = totalUncoveredWorkload + slotWorkload
+        }
+    }
+
+    return totalUncoveredWorkload
+}
+
+// Sums admission delay after each patient's release date.
+fun admissionDelayPenalty(): int {
+    var totalDelay = 0
+
+    for (admission in Admission.all()) {
+        var delay = admission.admissionDay - admission.patientId.releaseDate
+
+        if (delay > 0) {
+            totalDelay = totalDelay + delay
+        }
+    }
+
+    return totalDelay
+}
+
+// Counts nurse assignments on inactive room-shift slots.
+fun inactiveRoomShiftAssignmentViolation(): int {
+    var totalViolation = 0
+
+    for (assignment in RoomShiftAssignment.all()) {
+        var workload = 0
+        var shift = assignment.hospitalisationShift
+
+        for (demand in PatientDayDemand.all()) {
+            var contributingAdmissions = Admission.all().filter((admission) =>
+                admission.patientId == demand.patient &&
+                admission.roomId == shift.room &&
+                admission.admissionDay + demand.relativeDay == shift.day &&
+                demand.shift == shift.shift
+            )
+
+            if (contributingAdmissions.size() > 0) {
+                workload = workload + demand.workloadProduced
+            }
+        }
+
+        if (workload == 0) {
+            totalViolation = totalViolation + 1
+        }
+    }
+
+    return totalViolation
+}
+
+// Returns workload variance across nurses.
 fun NurseWorkloadDistributionInbalance(): double {
     var nurses = Nurse.all()
     var nurseCount = nurses.size()
@@ -141,12 +349,28 @@ fun NurseWorkloadDistributionInbalance(): double {
 
     for (nurse in nurses) {
         var nurseLoad = 0.0
-        var matches = RoomShiftAssignment.all().filter((assignment) =>
+        var assignments = RoomShiftAssignment.all().filter((assignment) =>
             assignment.nurse == nurse
         )
 
-        for (assignment in matches) {
-            nurseLoad = nurseLoad + assignment.hospitalisationShift.workload
+        for (assignment in assignments) {
+            var assignmentWorkload = 0
+            var shift = assignment.hospitalisationShift
+
+            for (demand in PatientDayDemand.all()) {
+                var contributingAdmissions = Admission.all().filter((admission) =>
+                    admission.patientId == demand.patient &&
+                    admission.roomId == shift.room &&
+                    admission.admissionDay + demand.relativeDay == shift.day &&
+                    demand.shift == shift.shift
+                )
+
+                if (contributingAdmissions.size() > 0) {
+                    assignmentWorkload = assignmentWorkload + demand.workloadProduced
+                }
+            }
+
+            nurseLoad = nurseLoad + assignmentWorkload
         }
 
         totalWorkload = totalWorkload + nurseLoad
@@ -157,36 +381,67 @@ fun NurseWorkloadDistributionInbalance(): double {
 
     for (nurse in nurses) {
         var nurseLoad = 0.0
-        var matches = RoomShiftAssignment.all().filter((assignment) =>
+        var assignments = RoomShiftAssignment.all().filter((assignment) =>
             assignment.nurse == nurse
         )
 
-        for (assignment in matches) {
-            nurseLoad = nurseLoad + assignment.hospitalisationShift.workload
+        for (assignment in assignments) {
+            var assignmentWorkload = 0
+            var shift = assignment.hospitalisationShift
+
+            for (demand in PatientDayDemand.all()) {
+                var contributingAdmissions = Admission.all().filter((admission) =>
+                    admission.patientId == demand.patient &&
+                    admission.roomId == shift.room &&
+                    admission.admissionDay + demand.relativeDay == shift.day &&
+                    demand.shift == shift.shift
+                )
+
+                if (contributingAdmissions.size() > 0) {
+                    assignmentWorkload = assignmentWorkload + demand.workloadProduced
+                }
+            }
+
+            nurseLoad = nurseLoad + assignmentWorkload
         }
 
-        var diff = nurseLoad - meanWorkload
-        varianceSum = varianceSum + (diff * diff)
+        var difference = nurseLoad - meanWorkload
+        varianceSum = varianceSum + (difference * difference)
     }
 
     return varianceSum / nurseCount
 }
 
+// Sums nurse workload excess and invalid working-shift assignments.
 fun totalWorkloadViolation(): int {
     var totalViolation = 0
-    var workingShifts = NurseWorkingShift.all()
-    var assignments = RoomShiftAssignment.all()
 
-    for (workingShift in workingShifts) {
+    for (workingShift in NurseWorkingShift.all()) {
         var currentLoad = 0
-        var matchingAssignments = assignments.filter((assignment) =>
+        var assignments = RoomShiftAssignment.all().filter((assignment) =>
             assignment.nurse == workingShift.nurse &&
             assignment.hospitalisationShift.day == workingShift.day &&
             assignment.hospitalisationShift.shift == workingShift.shift
         )
 
-        for (assignment in matchingAssignments) {
-            currentLoad = currentLoad + assignment.hospitalisationShift.workload
+        for (assignment in assignments) {
+            var assignmentWorkload = 0
+            var shift = assignment.hospitalisationShift
+
+            for (demand in PatientDayDemand.all()) {
+                var contributingAdmissions = Admission.all().filter((admission) =>
+                    admission.patientId == demand.patient &&
+                    admission.roomId == shift.room &&
+                    admission.admissionDay + demand.relativeDay == shift.day &&
+                    demand.shift == shift.shift
+                )
+
+                if (contributingAdmissions.size() > 0) {
+                    assignmentWorkload = assignmentWorkload + demand.workloadProduced
+                }
+            }
+
+            currentLoad = currentLoad + assignmentWorkload
         }
 
         if (currentLoad > workingShift.maxLoad) {
@@ -194,24 +449,38 @@ fun totalWorkloadViolation(): int {
         }
     }
 
-    for (assignment in assignments) {
-        var nurse = assignment.nurse
+    for (assignment in RoomShiftAssignment.all()) {
         var shift = assignment.hospitalisationShift
-
-        var matchingWorkingShifts = workingShifts.filter((workingShift) =>
-            workingShift.nurse == nurse &&
+        var matchingWorkingShifts = NurseWorkingShift.all().filter((workingShift) =>
+            workingShift.nurse == assignment.nurse &&
             workingShift.day == shift.day &&
             workingShift.shift == shift.shift
         )
 
         if (matchingWorkingShifts.size() == 0) {
-            totalViolation = totalViolation + shift.workload
+            var assignmentWorkload = 0
+
+            for (demand in PatientDayDemand.all()) {
+                var contributingAdmissions = Admission.all().filter((admission) =>
+                    admission.patientId == demand.patient &&
+                    admission.roomId == shift.room &&
+                    admission.admissionDay + demand.relativeDay == shift.day &&
+                    demand.shift == shift.shift
+                )
+
+                if (contributingAdmissions.size() > 0) {
+                    assignmentWorkload = assignmentWorkload + demand.workloadProduced
+                }
+            }
+
+            totalViolation = totalViolation + assignmentWorkload
         }
     }
 
     return totalViolation
 }
 
+// Returns room-day occupancy standard deviation.
 fun roomOccupancyStandardDeviation(): double {
     var roomAvailabilities = RoomAvailability.all()
     var availabilityCount = roomAvailabilities.size()

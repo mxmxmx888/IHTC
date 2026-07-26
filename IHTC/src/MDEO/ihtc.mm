@@ -1,8 +1,8 @@
-
 enum Gender {
     M
-    F 
+    F
 }
+
 enum AgeGroup {
     BABY
     CHILD
@@ -12,8 +12,10 @@ enum AgeGroup {
     EMPTY
 }
 
-
-
+enum OptimisationPhase {
+    PATIENTS
+    NURSES
+}
 
 class HospitalInstance {
     decisionHorizon: int
@@ -30,13 +32,13 @@ HospitalInstance.hospitalisationShifts[0..*] --> HospitalisationShift
 HospitalInstance.nurseWorkingShifts[0..*] --> NurseWorkingShift
 HospitalInstance.roomShiftAssignments[0..*] --> RoomShiftAssignment
 HospitalInstance.deletedAdmissionsTrackers[0..*] --> DeletedAdmissionsTracker
-
-
+HospitalInstance.optimisationState[1..1] --> OptimisationState
+HospitalInstance.admissions[0..*] --> Admission
 
 class Patient {
     id: int
     isMandatory: boolean
-    isScheduled: boolean //temporary workaround for Transformation 2
+    isScheduled: boolean
     dueDate: int
     releaseDate: int
     ageGroup: AgeGroup
@@ -44,7 +46,7 @@ class Patient {
     gender: Gender
     stayLength: int
 }
-Patient.assignedSurgeonId[1..1]--> Surgeon
+Patient.assignedSurgeonId[1..1] --> Surgeon
 Patient.incompatibleRooms[0..*] --> Room
 Patient.dayDemand[1..*] --> PatientDayDemand
 
@@ -64,30 +66,25 @@ class Surgeon {
 }
 
 class OperatingTheatre {
-    id: int 
+    id: int
 }
 
 class Admission {
-    admissionDay: int 
+    admissionDay: int
 }
 Admission.patientId[1..1] --> Patient
-Admission.roomId[1..1]--> Room
-Admission.operationTheatreId[1..1]--> OperatingTheatre
-
+Admission.roomId[1..1] --> Room
+Admission.operationTheatreId[1..1] --> OperatingTheatre
 
 class SurgeonAvailability {
     day: int
-    maxOperatingTime: int 
-}
-
-class DeletedAdmissionsTracker {
-    count: int 
+    maxOperatingTime: int
 }
 SurgeonAvailability.surgeonId[1..1] --> Surgeon
 
 class OperatingTheatreAvailability {
-    day: int 
-    maxCapacity: int 
+    day: int
+    maxCapacity: int
 }
 OperatingTheatreAvailability.operatingTheatreId[1..1] --> OperatingTheatre
 
@@ -99,19 +96,23 @@ class RoomAvailability {
 }
 RoomAvailability.roomId[1..1] --> Room
 
+class DeletedAdmissionsTracker {
+    count: int
+}
+
 class HospitalisationShift {
     day: int
     shift: int
-    roomNumber: int
-    workload: int
-    skillLevelRequired: int
 }
 HospitalisationShift.room[1..1] --> Room
-HospitalisationShift.patient[0..*] --> Patient
+
+class OptimisationState {
+    phase: OptimisationPhase
+}
 
 class Nurse {
     id: int
-    skillLevel: int 
+    skillLevel: int
 }
 
 class NurseWorkingShift {
@@ -126,7 +127,6 @@ class RoomShiftAssignment {
 RoomShiftAssignment.nurse[1..1] --> Nurse
 RoomShiftAssignment.hospitalisationShift[1..1] --> HospitalisationShift
 
-
 class PatientDayDemand {
     relativeDay: int
     shift: int
@@ -134,4 +134,3 @@ class PatientDayDemand {
     skillLevelRequired: int
 }
 PatientDayDemand.patient[1..1] --> Patient
-

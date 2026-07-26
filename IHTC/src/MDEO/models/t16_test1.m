@@ -71,3 +71,6 @@ targetShift: HospitalisationShift { day = 1 shift = 0 roomNumber = 2 workload = 
 targetShift.room -- r2
 targetShift.patient -- p2
 hospital.hospitalisationShifts -- targetShift
+hospital.admissions -- a0
+hospital.admissions -- a1
+hospital.admissions -- a2

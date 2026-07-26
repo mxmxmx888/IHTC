@@ -1,10 +1,17 @@
 using "../ihtc.mm"
 
+// T9: Move a scheduled patient to a different feasible admission day while
+// keeping their room and theatre. The old stay is released, the new stay is
+// checked in full, and then the new occupancy is recorded.
 match {
-    // Transformation 9: move an admitted patient to a different feasible day.
-    // The room and theatre stay the same. RoomAvailability is first updated
-    // on the old interval, then validated and updated on the new interval.
     hospital: HospitalInstance {}
+
+    state: OptimisationState {
+        phase == OptimisationPhase.PATIENTS
+    }
+
+    hospital.optimisationState -- state
+
 
     patient: Patient {
         isScheduled == true
@@ -51,6 +58,7 @@ match {
     var removeDay = oldStartDay
 }
 
+// Release the old room occupancy day by day before testing the new interval.
 while (removeDay <= oldEndDay) {
     if match {
         lastBedTarget: RoomAvailability {
@@ -83,6 +91,8 @@ match {
     var checkDay = newStartDay
 }
 
+// Validate the complete new stay: each room day must be empty or compatible
+// with the patient's age group and still have available capacity.
 while (checkDay <= newEndDay) {
     if match {
         stayCheckEmpty: RoomAvailability {
@@ -115,6 +125,7 @@ match {
     var addDay = newStartDay
 }
 
+// Record occupancy over every day of the approved new stay interval.
 while (addDay <= newEndDay) {
     if match {
         emptyDayTarget: RoomAvailability {
@@ -142,6 +153,7 @@ while (addDay <= newEndDay) {
 }
 
 match {
+    // Store the selected new admission day after both intervals are updated.
     admission {
         admissionDay = newStartDay
     }

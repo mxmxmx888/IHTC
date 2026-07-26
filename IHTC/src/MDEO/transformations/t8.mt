@@ -1,8 +1,16 @@
 using "../ihtc.mm"
 
+// T8: Move a scheduled patient to another compatible room without changing the
+// admission day or theatre. The rule validates the target room for the full
+// stay, then transfers occupancy from the old room to the new room.
 match {
-    // Transformation 8: move an admitted patient to a different compatible room.
-    // Full-stay RoomAvailability is updated for both the old room and the new room.
+    hospital: HospitalInstance {}
+
+    state: OptimisationState {
+        phase == OptimisationPhase.PATIENTS
+    }
+
+    hospital.optimisationState -- state
     patient: Patient {
         isScheduled == true
     }
@@ -32,6 +40,7 @@ match {
     var checkDay = startDay
 }
 
+// Ensure every target room day can accommodate the patient and their age group.
 while (checkDay <= endDay) {
     if match {
         stayCheckEmpty: RoomAvailability {
@@ -64,6 +73,7 @@ match {
     var removeDay = startDay
 }
 
+// Release the old room interval before adding the patient to the new room.
 while (removeDay <= endDay) {
     if match {
         lastBedTarget: RoomAvailability {
@@ -100,6 +110,7 @@ match {
     var addDay = startDay
 }
 
+// Populate the new room interval, preserving the no-age-group-mixing rule.
 while (addDay <= endDay) {
     if match {
         emptyDayTarget: RoomAvailability {
@@ -131,6 +142,7 @@ while (addDay <= endDay) {
 }
 
 match {
+    // Change only the admission's room association once both intervals match.
     delete admission.roomId -- oldRoom
     create admission.roomId -- newRoom
 }

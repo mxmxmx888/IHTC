@@ -174,3 +174,4 @@ newRa5: RoomAvailability {
 }
 newRa5.roomId -- r2
 hospital.roomAvailabilities -- newRa5
+hospital.admissions -- a1

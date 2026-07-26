@@ -1,10 +1,17 @@
 using "../ihtc.mm"
 
+// T13: Make a joint admission-day and theatre reassignment while retaining the
+// current room. It moves the patient's full room stay to a validated new day
+// interval and then updates the admission day and theatre association.
 match {
-    // Transformation 13: change a patient's admission day and theatre.
-    // The room stays the same. RoomAvailability is updated from the
-    // old interval to the new interval.
     hospital: HospitalInstance {}
+
+    state: OptimisationState {
+        phase == OptimisationPhase.PATIENTS
+    }
+
+    hospital.optimisationState -- state
+
 
     patient: Patient {
         isScheduled == true
@@ -54,6 +61,7 @@ match {
     var removeDay = oldStartDay
 }
 
+// Release the existing room interval one day at a time.
 while (removeDay <= oldEndDay) {
     if match {
         lastBedTarget: RoomAvailability {
@@ -86,6 +94,7 @@ match {
     var checkDay = newStartDay
 }
 
+// Validate the current room across the complete proposed new stay.
 while (checkDay <= newEndDay) {
     if match {
         stayCheckEmpty: RoomAvailability {
@@ -118,6 +127,7 @@ match {
     var addDay = newStartDay
 }
 
+// Reapply the patient's occupancy for each day of the new stay.
 while (addDay <= newEndDay) {
     if match {
         emptyDayTarget: RoomAvailability {
@@ -145,6 +155,7 @@ while (addDay <= newEndDay) {
 }
 
 match {
+    // Commit the new admission day and operating theatre after room updates.
     admission {
         admissionDay = newStartDay
     }

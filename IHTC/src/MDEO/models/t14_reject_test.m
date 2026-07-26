@@ -20,7 +20,7 @@ d1: PatientDayDemand { relativeDay = 0 shift = 0 workloadProduced = 3 skillLevel
 d1.patient -- p1
 p1.dayDemand -- d1
 
-n1: Nurse { id = 1 skillLevel = 2 }
+n1: Nurse { id = 1 skillLevel = 1 }
 hospital.nurses -- n1
 nws1: NurseWorkingShift { day = 1 shift = 0 maxLoad = 3 }
 nws1.nurse -- n1

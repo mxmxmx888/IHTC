@@ -1,16 +1,18 @@
 using "../ihtc.mm"
 
+// T15: Remove one nurse-to-room-shift assignment during the nurse phase. This
+// repair move frees a nurse assignment so later mutations can rebalance cover.
 match {
-    // Transformation 15: remove a nurse from a room-shift assignment.
-    // This removes only the staffing assignment, not the underlying shift demand.
-
+    hospital: HospitalInstance {}
+    state: OptimisationState {
+        phase == OptimisationPhase.NURSES
+    }
     nurse: Nurse {}
     shift: HospitalisationShift {}
-    room: Room {}
+    delete assignment: RoomShiftAssignment {}
 
-    delete rsa: RoomShiftAssignment {}
-
-    shift.room -- room
-    delete rsa.nurse -- nurse
-    delete rsa.hospitalisationShift -- shift
+    hospital.optimisationState -- state
+    // Deleting the assignment and both links removes the nurse from this slot.
+    delete assignment.nurse -- nurse
+    delete assignment.hospitalisationShift -- shift
 }

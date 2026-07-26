@@ -1,11 +1,20 @@
 using "../ihtc.mm"
-// Transformation 10: give a random admitted patient a random new compatible
-// operating theatre.
-// Purpose: to reassign a patient to a different feasible theatre on the same
-// admission day in order to improve theatre usage or overall resource balance.
+
+// T10: Reassign a scheduled patient's operation to another available theatre
+// on the same admission day. This changes only the theatre association, so no
+// room-stay update is required.
 
 match{
-    
+    hospital: HospitalInstance {}
+
+    state: OptimisationState {
+        phase == OptimisationPhase.PATIENTS
+    }
+
+    hospital.optimisationState -- state
+
+    // The availability record ensures the replacement theatre is usable on the
+    // current admission day and has positive capacity.
     patient: Patient{}
     admission: Admission{}
     ot: OperatingTheatre{}
