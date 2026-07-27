@@ -6,6 +6,7 @@ using "../ihtc.mm"
 match {
     hospital: HospitalInstance {}
 
+    // The transition can be matched only once from the initial patient phase.
     state: OptimisationState {
         phase == OptimisationPhase.PATIENTS
     }

@@ -1,6 +1,6 @@
 using "./ihtc.mm"
 
-// Counts scheduled patients.
+// Counts current admissions for the scheduled-patient maximisation objective.
 fun admittedPatientsAmount(): int {
     return Admission.all().size()
 }
@@ -44,7 +44,7 @@ fun mandatoryPatientsAdmitted(): boolean {
     return true
 }
 
-// Penalises invalid patient-to-nurse phase states.
+// Penalises nurse assignments before the nurse phase and missing mandatory admissions after it.
 fun nurseAssignmentPhaseConsistency(): int {
     var state = OptimisationState.first()
 
@@ -192,7 +192,7 @@ fun totalSkillLevelViolation(): int {
     return totalViolation
 }
 
-// Counts active room-shift slots with nurse cover.
+// Counts active room-shift slots with at least one nurse assignment.
 fun RoomShiftCoverage(): int {
     var coveredShiftCount = 0
 
@@ -336,7 +336,7 @@ fun inactiveRoomShiftAssignmentViolation(): int {
     return totalViolation
 }
 
-// Returns workload variance across nurses.
+// Returns the variance of workload derived from each nurse's active assignments.
 fun NurseWorkloadDistributionInbalance(): double {
     var nurses = Nurse.all()
     var nurseCount = nurses.size()
@@ -412,7 +412,7 @@ fun NurseWorkloadDistributionInbalance(): double {
     return varianceSum / nurseCount
 }
 
-// Sums nurse workload excess and invalid working-shift assignments.
+// Sums workload above nurse limits and assignments outside working shifts.
 fun totalWorkloadViolation(): int {
     var totalViolation = 0
 
@@ -480,7 +480,7 @@ fun totalWorkloadViolation(): int {
     return totalViolation
 }
 
-// Returns room-day occupancy standard deviation.
+// Returns the standard deviation of occupied beds across room-day records.
 fun roomOccupancyStandardDeviation(): double {
     var roomAvailabilities = RoomAvailability.all()
     var availabilityCount = roomAvailabilities.size()

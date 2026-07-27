@@ -6,11 +6,12 @@ using "../ihtc.mm"
 match {
     hospital: HospitalInstance {}
 
-    state: OptimisationState {
-        phase == OptimisationPhase.PATIENTS
-    }
+    state: OptimisationState {}
 
     hospital.optimisationState -- state
+
+    // Optional admissions remain available after the nurse phase begins.
+    where state.phase == OptimisationPhase.PATIENTS || state.phase == OptimisationPhase.NURSES
 
 
     patient: Patient {

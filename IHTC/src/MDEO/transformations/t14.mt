@@ -6,6 +6,7 @@ using "../ihtc.mm"
 match {
     hospital: HospitalInstance {}
 
+    // Nurse-only move; unavailable until mandatory patient admissions are complete.
     state: OptimisationState {
         phase == OptimisationPhase.NURSES
     }

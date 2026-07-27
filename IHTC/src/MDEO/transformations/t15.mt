@@ -4,6 +4,7 @@ using "../ihtc.mm"
 // repair move frees a nurse assignment so later mutations can rebalance cover.
 match {
     hospital: HospitalInstance {}
+    // Nurse-only repair move; unavailable during patient scheduling.
     state: OptimisationState {
         phase == OptimisationPhase.NURSES
     }

@@ -7,6 +7,7 @@ using "../ihtc.mm"
 match{
     hospital: HospitalInstance {}
 
+    // Patient-only reassignment move; disabled once nurse assignment begins.
     state: OptimisationState {
         phase == OptimisationPhase.PATIENTS
     }
