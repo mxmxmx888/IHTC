@@ -1,0 +1,508 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[a4paper,margin=2.2cm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{longtable}
+\usepackage{graphicx}
+\usepackage{titlesec}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.6em}
+
+\setlist[itemize]{leftmargin=1.5em,itemsep=0.2em,topsep=0.3em,parsep=0pt,partopsep=0pt}
+\setlist[enumerate]{leftmargin=1.8em,itemsep=0.2em,topsep=0.3em,parsep=0pt,partopsep=0pt}
+
+\titlespacing*{\subsection}{0pt}{0.9em}{0.4em}
+
+\newcommand{\reportsection}[1]{%
+  \refstepcounter{section}%
+  \addcontentsline{toc}{section}{\protect\numberline{\thesection}#1}%
+  \vspace{1.2em}%
+  \noindent\rule{\textwidth}{0.4pt}\par\vspace{0.8ex}%
+  \noindent{\Large\bfseries \thesection\quad #1}\par\vspace{0.5em}%
+}
+
+\begin{document}
+
+\begin{titlepage}
+\thispagestyle{empty}
+\begin{center}
+\fontfamily{ptm}\selectfont
+\fontsize{12}{24}\selectfont
+
+King's College London
+
+\vspace*{0.22\textheight}
+
+Comparative Evaluation of Optimisation Approaches for Hospital Resource Scheduling
+
+\vspace*{0.16\textheight}
+
+Maksym Byelko \& Kexin Zhong\\
+EPSRC Summer Internship\\
+Steffen Zschaler\\
+August 2026
+\end{center}
+\end{titlepage}
+
+\tableofcontents
+\clearpage
+
+\reportsection{Aim}
+
+This experiment evaluates an MDEO-Cloud implementation against a Python-based optimiser for the International Hospital Timetabling Competition (IHTC) scheduling problem~\cite{ceschia2025ihtc}. Both solve the same integrated hospital-planning problem. Patients are assigned admission days, rooms, and operating theatres, after which nurses are allocated to the room-day-shift demand created by those assignments.
+
+The evaluation examines feasibility, schedule quality, and the computational effort needed to obtain a schedule. Each approach uses the same IHTC benchmark instances and input data, with optimisation budgets set on comparable terms. Observed differences can therefore be attributed to the implementation approach rather than to variations in the instance data or experimental configuration.
+
+The study records patient-admission outcomes, resource use, nursing coverage, constraint violations, and search-performance measures. It compares the results obtained on the selected benchmarks and considers the practical implications of using model-driven optimisation in MDEO-Cloud instead of a conventional Python implementation for hospital scheduling.
+
+\reportsection{Controlled Variables}
+
+Both implementations use the same IHTC benchmark instance and associated input data. This holds the scheduling problem constant while the implementation approach varies. Runtime, feasibility, and solution quality are recorded as experimental outcomes.
+
+\begin{itemize}
+    \item \textbf{Patients and occupants:} patient priority, release and due dates, length of stay, surgery duration, assigned surgeon, room compatibility, and existing occupants.
+    \item \textbf{Nursing data:} nurse skill levels, working-shift availability, maximum workload, and daily nursing demand for each patient.
+    \item \textbf{Surgical resources:} surgeon availability and operating-theatre capacity for each day.
+    \item \textbf{Room resources:} room capacity, compatibility requirements, and initial occupancy.
+    \item \textbf{Planning structure:} the decision horizon, available rooms, shift definitions, and scheduling rules specified by the IHTC instance.
+\end{itemize}
+
+\reportsection{Problem Definition}
+
+The IHTC problem links patient scheduling with nurse assignment. Patient scheduling determines whether a patient is admitted and, where admission occurs, assigns an admission day, room, and operating theatre. The selected date must lie within the patient's release and due dates. It must also respect the availability of the assigned surgeon and operating theatre.
+
+Room constraints apply throughout a patient's stay. The assigned room must have capacity on every occupied day, and patients in different age groups may not share a room on the same day. Existing occupants use room capacity and create nursing demand, although they are not scheduling decisions.
+
+Active room-day-shift slots are derived from admitted patients and their daily demand records. A nurse may be assigned to a slot when they work that day and shift and meet its skill requirement. The resulting allocation is assessed using coverage, uncovered workload, workload excess, and workload balance~\cite{ceschia2025ihtc}.
+
+The metamodel captures the relevant decisions and resource states. It includes patients, admissions, rooms and room-day availability, surgeons and their availability, operating theatres and their availability, nurses and working shifts, patient-day demands, hospitalisation shifts, and room-shift assignments. Optimisation transformations revise candidate schedules, while objective functions evaluate them.
+
+\reportsection{Dataset Sizes}
+
+The evaluation uses ten IHTC 2024 benchmark instances. They differ in the number of patients awaiting admission, existing occupants, and available hospital resources. Existing occupants are reported separately because they occupy rooms and generate nursing demand, although they are not admission decisions.
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{lrrrrrrr}
+\toprule
+\textbf{Test} & \textbf{Days} & \textbf{Patients} & \textbf{Occupants} & \textbf{Nurses} & \textbf{Rooms} & \textbf{Surgeons} & \textbf{Theatres} \\
+\midrule
+IHTC 2024 Test 01 & 21 & 42 & 7 & 13 & 5 & 1 & 2 \\
+IHTC 2024 Test 02 & 14 & 37 & 5 & 17 & 6 & 2 & 3 \\
+IHTC 2024 Test 03 & 14 & 45 & 10 & 14 & 6 & 1 & 2 \\
+IHTC 2024 Test 04 & 14 & 54 & 7 & 19 & 8 & 2 & 3 \\
+IHTC 2024 Test 05 & 14 & 62 & 9 & 15 & 6 & 1 & 2 \\
+IHTC 2024 Test 06 & 14 & 111 & 9 & 20 & 9 & 3 & 3 \\
+IHTC 2024 Test 07 & 21 & 113 & 13 & 22 & 9 & 2 & 3 \\
+IHTC 2024 Test 08 & 21 & 173 & 15 & 21 & 9 & 2 & 3 \\
+IHTC 2024 Test 09 & 21 & 146 & 26 & 29 & 14 & 2 & 2 \\
+IHTC 2024 Test 10 & 21 & 525 & 50 & 83 & 46 & 10 & 11 \\
+\bottomrule
+\end{tabular}
+\caption{Resource composition of the IHTC 2024 benchmark instances~\cite{ceschia2025ihtc}. Values were derived from the supplied JSON benchmark files.}
+\end{table}
+
+Test labels do not rank the instances by size. For example, Test 02 contains fewer patients than Test 01. The benchmark set therefore examines scalability across irregular instance sizes rather than fixed artificial categories.
+
+\reportsection{Optimisation Approaches}
+
+Both implementations should be evaluated using the same instance set and equivalent optimisation budgets.
+
+\subsection{MDEO-Cloud Solution}
+
+The MDEO-Cloud implementation encodes each IHTC instance as a typed model. Patients, admissions, resources, availability records, nursing-demand records, and nurse assignments are represented as explicit model elements. Each candidate schedule is stored as a complete model instance and processed within the MDEO-Cloud platform~\cite{krieger2026mdeo}.
+
+NSGA-II~\cite{deb2002nsga2} explores candidate schedules through model transformations. These transformations add, remove, or reassign patient admissions, rooms, admission days, and operating theatres. They also create, remove, and move nurse assignments between room-day-shift slots. Guards reject infeasible changes before the transformations are applied. A phase state transfers the search from patient scheduling to nurse assignment after all mandatory patients have been admitted.
+
+Objective functions calculate resource use and nursing demand from the current admission assignments and patient-day demand records. The MDEO-Cloud implementation optimises the following objectives:
+
+\begin{itemize}
+    \item maximise admitted patients.
+    \item minimise unscheduled optional patients and admission delay.
+    \item minimise room, surgeon, and operating-theatre capacity violations.
+    \item minimise uncovered room-shifts and nursing workload.
+    \item minimise excess and imbalanced nurse workload.
+    \item minimise inactive nurse assignments.
+\end{itemize}
+
+\subsection{Python-Based Solution}
+The Python-based implementation formulates the IHTC scheduling problem as a Mixed Integer Linear Programming (MILP) model built upon the PuLP optimisation library. This exact optimisation framework differs fundamentally from the heuristic NSGA-II evolutionary algorithm adopted in MDEO-Cloud. All hard constraints laid down by the IHTC competition regulations are explicitly encoded as linear equalities and inequalities to guarantee the feasibility of generated schedules.
+
+The objective function adopts a weighted single-objective minimisation structure which aggregates eight soft penalty terms aligned with the competition evaluation metrics, corresponding to soft constraints S1 to S8: unscheduled patient penalty, admission delay penalty, open operating theatre penalty, age-mixing penalty, skill mismatch penalty, excess nurse workload penalty, continuity-of-care penalty, and surgeon transfer penalty. Weight parameters for each cost component follow the official benchmark configuration to ensure a fair comparison across the two solution approaches.
+
+The model comprises two sequential decision layers: patient admission and room allocation, followed by nurse assignment for room-day-shift slots. Binary decision variables are defined to represent patient admission status, room occupancy, operating theatre activation and nurse-room shift allocation. The Big-M linearisation technique is utilised to convert non-linear logical rules into standard linear constraints. PuLP invokes the open-source CBC solver to find optimal or near-optimal feasible solutions under pre-defined computational time limits.
+
+In contrast to the iterative evolutionary search of MDEO-Cloud, the MILP approach can deliver mathematically provable optimal solutions given sufficient computational resources. Nevertheless, the quantity of variables and constraints expands rapidly as the instance scale grows, imposing substantial memory and runtime overhead for larger benchmark test cases.
+
+\reportsection{Constraints}
+
+\subsection{MDEO-Cloud Solution}
+
+The MDEO-Cloud solution enforces feasibility through transformation guards and one configuration-level constraint. Transformation guards prevent invalid scheduling or nurse-assignment moves from being applied, while objective functions measure remaining solution-quality penalties.
+
+\begin{itemize}
+    \item \textbf{Phase consistency:} the \texttt{nurseAssignmentPhaseConsistency} constraint requires the final candidate to be in the \texttt{NURSES} phase and requires every mandatory patient to have an admission. Nurse assignments are not permitted during the \texttt{PATIENTS} phase.
+
+    \item \textbf{Patient admission window:} a new admission day must lie between the patient's release date and due date, and the complete patient stay must remain within the decision horizon.
+
+    \item \textbf{Surgeon and theatre feasibility:} a patient can only be admitted when their assigned surgeon has sufficient operating time on the selected day and the selected theatre has positive available capacity on that day.
+
+    \item \textbf{Room compatibility:} a patient cannot be assigned to a room listed in their incompatible rooms.
+
+    \item \textbf{Full-stay room capacity:} every room-day within the patient's stay must have spare capacity before an admission or room reassignment is applied.
+
+    \item \textbf{Room age-group compatibility:} each occupied room-day must either be empty or already contain patients from the same age group. Patients from different age groups cannot be mixed in the same room on the same day.
+
+    \item \textbf{Nurse availability:} a nurse can only be assigned to a room-day-shift when they have a matching \texttt{NurseWorkingShift} on the same day and shift.
+
+    \item \textbf{Nurse skill compatibility:} a nurse assignment is rejected if any patient demand contributing to the target room-day-shift requires a higher skill level than that nurse possesses.
+
+    \item \textbf{Active nurse assignments:} nurses can only be assigned to room-day-shift slots for which a current admission and patient-day demand generate nursing demand. Duplicate assignments to the same slot are prevented.
+
+    \item \textbf{Objective-based violations:} total room capacity excess, surgeon capacity excess, theatre capacity excess, uncovered room-shifts, uncovered workload, nurse workload excess, inactive nurse assignments, and workload imbalance are minimised as objective values rather than configuration-level hard constraints.
+\end{itemize}
+
+\subsection{Python-Based Solution}
+The Python-based MILP model strictly separates hard constraints (which cannot be violated under any feasible solution) and soft penalty constraints (permitted to be violated but incur additive cost within the objective function). All hard rules defined by the IHTC competition are encoded as linear equality and inequality constraints enforced by the solver. No constraint violation is allowed in any feasible schedule.
+
+\begin{itemize}
+    \item \textbf{Patient admission window}: The admission day of each scheduled patient must lie within the interval between the patient’s release date and due date. The complete length-of-stay period must not exceed the planning horizon.
+    \item \textbf{Surgeon and theatre feasibility}: A patient may only be admitted on a day where their assigned surgeon has available operating capacity and the selected operating theatre possesses residual capacity on that day.
+    \item \textbf{Room compatibility}: A patient cannot be allocated to any room marked within their incompatible room list.
+    \item \textbf{Full-stay room capacity}: For every day covered by the patient’s stay, the assigned room must maintain spare capacity to accommodate the patient.
+    \item \textbf{Room age-group compatibility}: Patients from distinct age groups cannot occupy the same room on the same day. This rule is implemented as a hard constraint.
+    \item \textbf{Nurse availability}: A nurse can only be assigned to a room-day-shift slot if they hold a valid \textit{NurseWorkingShift} record for that exact day and shift.
+    \item \textbf{Nurse skill compatibility}: The skill level of an assigned nurse must satisfy or exceed the maximum skill demand generated by patients within the corresponding room-day-shift.
+    \item \textbf{Active nurse assignments}: Nurse allocation is only enabled for room-day-shift entries with active patient admissions and positive nursing demand. Multiple assignments of the same nurse to one room-day-shift are prohibited.
+\end{itemize}
+
+Resource excess conditions, age-group mixing, uncovered nursing workload, nurse workload overload, care continuity degradation and other performance metrics are not implemented as hard constraints. These rules correspond to soft constraints S1–S8, and all associated penalties are aggregated into the weighted objective function for minimisation.
+
+\reportsection{Evaluation Metrics}
+
+The experiment evaluates solutions in two stages: feasibility first, followed by solution quality and search performance. Every final schedule is independently checked against the full hard-constraint set. A run is feasible only when it has no hard-constraint violations. If no feasible candidate is produced within the time limit, the run is classified as infeasible and does not contribute an IHTC score to feasible-solution quality summaries; its constraint-violation values are reported as diagnostics instead.
+
+\subsection{MDEO-Cloud Solution}
+
+\subsubsection{Feasibility Metrics}
+
+\begin{itemize}
+    \item Final feasibility status: whether the selected final candidate has no hard-constraint violations.
+    \item Hard-constraint diagnostics: each hard-constraint type is reported separately. For quantitative constraints, magnitude is measured in its natural unit, such as excess beds, operating time, or nurse workload. For Boolean constraints, magnitude is the number of invalid assignments or room-days. These values are diagnostic and are not weighted.
+    \item Mandatory-patient completion rate: proportion of mandatory patients that receive an admission.
+\end{itemize}
+
+\subsubsection{Patient Scheduling Metrics}
+
+\begin{itemize}
+    \item Number and proportion of optional patients admitted.
+    \item Number of unscheduled optional patients.
+    \item Total and mean admission delay, measured from each patient's release date to their admission day.
+    \item Number of open operating theatres per day.
+    \item Number of theatres used by each surgeon per day.
+    \item Room age-mixing cost, where age mixing is treated as a soft constraint by an implementation.
+\end{itemize}
+
+\subsubsection{Nurse Assignment Metrics}
+
+\begin{itemize}
+    \item Active room-shift coverage rate: proportion of room-day-shift slots with derived patient demand that receive a nurse assignment.
+    \item Uncovered workload: total workload associated with active room-shift slots without nurse cover.
+    \item Nurse workload excess: total workload above the maximum workload of the corresponding nurse working shift.
+    \item Nurse skill shortfall: total difference between required and assigned nurse skill levels.
+    \item Nurse workload imbalance, measured using the variance of total workload assigned across nurses.
+\end{itemize}
+
+\subsubsection{Resource Utilisation Metrics}
+
+\begin{itemize}
+    \item Room-bed utilisation: occupied room-bed days as a proportion of available room-bed days.
+    \item Operating-theatre utilisation: scheduled operating time as a proportion of available theatre time.
+    \item Surgeon utilisation: scheduled operating time as a proportion of each surgeon's available operating time.
+\end{itemize}
+
+\subsubsection{Search Performance Metrics}
+
+For each MDEO-Cloud execution, the report records:
+
+\begin{itemize}
+    \item wall-clock runtime, number of candidate evaluations, and number of completed generations;
+    \item time and candidate evaluations to the first feasible solution, where available from the execution log;
+    \item time and candidate evaluations to a pre-defined target IHTC score, where a common score has been calculated;
+    \item transformation attempts, successful transformations, and skipped or no-match transformations;
+    \item final common IHTC score and final feasibility status;
+    \item time to the best solution found during the execution.
+\end{itemize}
+
+\subsubsection{Reporting}
+
+The primary comparison metric is a common post-processed weighted IHTC solution cost calculated from the final feasible schedule of each implementation. This avoids comparing internal objective values that may be defined or scaled differently. Any weights defined by the IHTC evaluation specification are used only for this common score; no additional weights are introduced for hard-constraint feasibility reporting~\cite{ceschia2025ihtc}. Measures such as removed admissions, inactive nurse assignments, room-occupancy standard deviation, and transformation skip rate are retained as MDEO diagnostic metrics, but are not used as the main benchmark-quality measure.
+
+\subsection{Python-Based Solution}
+Evaluation of the MILP implementation follows the same two-stage framework: feasibility verification followed by solution quality assessment. A candidate schedule is only regarded as valid if all hard constraints are fully satisfied without violation. All feasible solutions are then evaluated using the unified official IHTC weighted cost function, which aggregates the eight soft penalty components S1–S8 as the primary comparison metric.
+
+The evaluation metrics are categorised consistently with the MDEO-Cloud benchmark, covering feasibility statistics, patient scheduling outcomes, nurse assignment performance and resource utilisation. Metrics specific to evolutionary search, such as generation count and transformation attempts, are omitted, as they are not applicable to the exact MILP solving paradigm.
+
+Solver performance is recorded via wall-clock runtime and final solver status (optimal, feasible or time-limited). Detailed per-instance soft penalty breakdowns are recorded to support cross-method comparison against results obtained from MDEO-Cloud.
+
+\reportsection{System Hardware}
+
+The MDEO-Cloud experiments were executed on a system with an AMD Ryzen 9 9950X3D processor and 96\,GB of DDR5 RAM. Tests 01--09 ran on a development virtual machine hosted on this hardware, with a smaller allocation of CPU threads. Test 10 received additional threads because the earlier allocation would have made the execution impractically long. Its runtime should therefore be interpreted in light of this different resource allocation.
+
+For Test 10, the MDEO-Cloud script timeout and model-transformation timeout were each set to 60 seconds. These settings allowed longer transformations to complete during the larger benchmark run.
+
+\reportsection{Experiment Procedure}
+
+Each benchmark instance is executed once per framework on the shared computer.
+
+\subsection{MDEO-Cloud Solution}
+
+For the completed MDEO-Cloud executions, the workflow was:
+
+\begin{itemize}
+    \item \textbf{Instance Collection:} the IHTC test instances were collected for the experiment.
+    \item \textbf{Model Conversion:} each test instance was converted into a valid MDEO-Cloud model representation.
+    \item \textbf{Model Validation:} the converted models were checked for required entities, links, and availability objects.
+    \item \textbf{Configuration:} solver hyperparameters were set, including population size, number of evolutions, and mutation settings.
+    \item \textbf{Termination:} MDEO-Cloud used no wall-clock time limit. Each run terminated after its configured number of generations and evolutions; wall-clock duration was recorded as an experimental result.
+    \item \textbf{Optimisation Execution:} the framework was run with the implemented metamodel, transformations, constraints, and objective functions.
+    \item \textbf{Schedule Generation:} final model solutions, including admissions and room-shift nurse assignments, were obtained.
+    \item \textbf{Pareto Selection:} the final feasible Pareto candidates were retained. Once the common IHTC score has been calculated, the lowest-scoring candidate will be selected for the final cross-implementation comparison; the current MDEO selections are provisional.
+    \item \textbf{Result Export:} final schedules were exported or converted into a readable format for analysis.
+    \item \textbf{Data Collection:} objective values, violations, runtime behaviour, and final schedule statistics were recorded for comparison.
+\end{itemize}
+
+\subsection{Python-Based Solution}
+
+\textit{To be completed by the author of the Python-based solution.}\par
+
+\reportsection{Quantitative Analysis}
+
+\subsection{MDEO-Cloud Solution}
+
+Results are reported separately for each benchmark instance. The common post-processed IHTC score and wall-clock runtime are the primary quantitative outcomes; feasibility, coverage, resource utilisation, and search-efficiency measures provide supporting explanation. Raw scores are not pooled across instances because the instances differ substantially in scale.
+
+For each instance, the following values are recorded where available:
+
+\begin{itemize}
+    \item final common IHTC score and feasibility status;
+    \item wall-clock runtime, candidate evaluations, and completed generations;
+    \item patient-admission, nursing-coverage, resource-utilisation, and constraint-diagnostic values.
+\end{itemize}
+
+These measures support the comparison of optimisation quality, runtime, and scalability between the two frameworks.
+
+\subsection{Python-Based Solution}
+
+\textit{To be completed by the author of the Python-based solution.}\par
+
+\reportsection{Results}
+
+\subsection{Per-Instance Comparison}
+
+Table~\ref{tab:instance-results} is the primary comparison table. The final comparison will select the feasible Pareto candidate with the lowest common post-processed IHTC score for each framework. The archived MDEO reports do not contain this common score, so the current MDEO rows are provisional and scores are marked as N/A. Tests~01--09 use the feasible candidate with the highest number of admitted patients. For Test~10, the reported candidate instead balances admissions with nursing coverage: it admits 349 patients, includes 44 nurse assignments, and has the lowest uncovered nursing workload among the resource-feasible candidates. The Python-based result should use the same final score and feasibility policy.
+
+\begin{table}[htbp]
+\centering
+\scriptsize
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lrrrrrrr}
+\toprule
+\textbf{Instance} & \textbf{Patients} & \textbf{MDEO Feasible} & \textbf{MDEO Score} & \textbf{MDEO Time (s)} & \textbf{Python Feasible} & \textbf{Python Score} & \textbf{Python Time (s)} \\
+\midrule
+IHTC 2024 Test 01 & 42  & Yes & N/A & 521  & -- & -- & -- \\
+IHTC 2024 Test 02 & 37  & Yes & N/A & 363  & -- & -- & -- \\
+IHTC 2024 Test 03 & 45  & Yes & N/A & 363  & -- & -- & -- \\
+IHTC 2024 Test 04 & 54  & Yes & N/A & 647  & -- & -- & -- \\
+IHTC 2024 Test 05 & 62  & Yes & N/A & 568  & -- & -- & -- \\
+IHTC 2024 Test 06 & 111 & Yes & N/A & 1,454 & -- & -- & -- \\
+IHTC 2024 Test 07 & 113 & Yes & N/A & 2,240 & -- & -- & -- \\
+IHTC 2024 Test 08 & 173 & Yes & N/A & 3,282 & -- & -- & -- \\
+IHTC 2024 Test 09 & 146 & Yes & N/A & 3,728 & -- & -- & -- \\
+IHTC 2024 Test 10 & 525 & Yes & N/A & 32,676 & -- & -- & -- \\
+\bottomrule
+\end{tabular}%
+}
+\caption{Per-instance comparison using the common post-processed IHTC score.}
+\label{tab:instance-results}
+\end{table}
+
+\subsection{Feasibility and Constraint Results}
+
+Table~\ref{tab:feasibility-results} records feasibility separately from solution quality. Capacity violations report room, theatre, and surgeon excess in the form \texttt{room/theatre/surgeon}; uncovered nursing workload is reported even when it is treated as a soft objective. The reported MDEO candidates have zero recorded constraints and resource-capacity violations. Tests~01--09 are selected by the highest number of admitted patients; Test~10 is selected for its admission--nursing coverage trade-off.
+
+{\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{longtable}{llrrrrr}
+\caption{Feasibility and constraint results by framework.}\label{tab:feasibility-results}\\
+\toprule
+\textbf{Instance} & \textbf{Framework} & \textbf{Feasible} & \textbf{Mandatory} & \textbf{All Patients} & \textbf{Capacity} & \textbf{Uncovered} \\
+& & & \textbf{Admitted} & \textbf{Admitted} & \textbf{Violations} & \textbf{Workload} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Instance} & \textbf{Framework} & \textbf{Feasible} & \textbf{Mandatory} & \textbf{All Patients} & \textbf{Capacity} & \textbf{Uncovered} \\
+& & & \textbf{Admitted} & \textbf{Admitted} & \textbf{Violations} & \textbf{Workload} \\
+\midrule
+\endhead
+IHTC 2024 Test 01 & MDEO-Cloud & Yes & 11/11 & 31/42 & 0/0/0 & 959 \\
+IHTC 2024 Test 01 & Python & -- & -- & -- & -- & -- \\
+IHTC 2024 Test 02 & MDEO-Cloud & Yes & 12/12 & 32/37 & 0/0/0 & 1,034 \\
+IHTC 2024 Test 02 & Python & -- & -- & -- & -- & -- \\
+IHTC 2024 Test 03 & MDEO-Cloud & Yes & 12/12 & 18/45 & 0/0/0 & 352 \\
+IHTC 2024 Test 03 & Python & -- & -- & -- & -- & -- \\
+IHTC 2024 Test 04 & MDEO-Cloud & Yes & 32/32 & 50/54 & 0/0/0 & 1,418 \\
+IHTC 2024 Test 04 & Python & -- & -- & -- & -- & -- \\
+IHTC 2024 Test 05 & MDEO-Cloud & Yes & 19/19 & 26/62 & 0/0/0 & 603 \\
+IHTC 2024 Test 05 & Python & -- & -- & -- & -- & -- \\
+IHTC 2024 Test 06 & MDEO-Cloud & Yes & 50/50 & 68/111 & 0/0/0 & 1,772 \\
+IHTC 2024 Test 06 & Python & -- & -- & -- & -- & -- \\
+IHTC 2024 Test 07 & MDEO-Cloud & Yes & 55/55 & 67/113 & 0/0/0 & 2,014 \\
+IHTC 2024 Test 07 & Python & -- & -- & -- & -- & -- \\
+IHTC 2024 Test 08 & MDEO-Cloud & Yes & 39/39 & 77/173 & 0/0/0 & 2,017 \\
+IHTC 2024 Test 08 & Python & -- & -- & -- & -- & -- \\
+IHTC 2024 Test 09 & MDEO-Cloud & Yes & 88/88 & 98/146 & 0/0/0 & 2,960 \\
+IHTC 2024 Test 09 & Python & -- & -- & -- & -- & -- \\
+IHTC 2024 Test 10 & MDEO-Cloud & Yes & 349/349 & 349/525 & 0/0/0 & 9,289 \\
+IHTC 2024 Test 10 & Python & -- & -- & -- & -- & -- \\
+\bottomrule
+\end{longtable}
+}
+
+\subsection{Performance and Scalability}
+
+\subsubsection{MDEO-Cloud Solution}
+
+Tests~01--10 completed with the same fixed budget of 300 generations and 59,900 candidate evaluations. Observed runtime ranged from 363~s for Test~02 (37 patients) to 32,676~s for Test~10 (525 patients). The smaller cases with 37--62 patients completed in 363--647~s, cases with 111--173 patients took 1,454--3,728~s, and Test~10 required approximately 9~hours and 5~minutes. This indicates a substantial increase in execution time as instances become larger and more structurally complex.
+
+Runtime was not determined by patient count alone: Test~09, with 146 patients, took longer than Test~08, with 173 patients. The difference is consistent with the variation in executed and skipped transformations shown in Table~\ref{tab:mdeo-diagnostics}, but a single execution per instance cannot isolate the effect of any individual instance characteristic. Test~10 also had substantially more candidate patients than the preceding instances, so its runtime cannot be attributed to patient count alone.
+
+For Test~10, the 300-generation budget did not show clear convergence. At the final generation, the search was still applying transformations and retained substantial trade-offs between patient admissions and nursing coverage. The reported 349-admission candidate was therefore selected as a balanced provisional solution rather than evidence that the search had reached its best attainable schedule.
+
+The common post-processed IHTC scores have not yet been calculated from the selected MDEO schedules, so a score-against-size chart is deferred until those values are available. No mean, standard deviation, or statistical significance claim is reported because each instance was executed once.
+
+\subsubsection{Python-Based Solution}
+
+\textit{To be completed by the author of the Python-based solution. Record corresponding runtime and IHTC-score results once available.}
+
+\subsection{MDEO-Cloud Diagnostics}
+
+Table~\ref{tab:mdeo-diagnostics} records MDEO-specific search behaviour. These values explain MDEO performance but are not used directly to compare the Python-based implementation.
+
+\begin{table}[htbp]
+\centering
+\scriptsize
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lrrrrr}
+\toprule
+\textbf{Instance} & \textbf{Generations} & \textbf{Candidate Evaluations} & \textbf{Executed Transformations} & \textbf{Skipped Transformations} & \textbf{Pareto Solutions} \\
+\midrule
+IHTC 2024 Test 01 & 300 & 59,900 & 113,202 & 54,708 & 100 \\
+IHTC 2024 Test 02 & 300 & 59,900 & 123,565 & 79,345 & 100 \\
+IHTC 2024 Test 03 & 300 & 59,900 & 110,520 & 47,546 & 100 \\
+IHTC 2024 Test 04 & 300 & 59,900 & 120,264 & 71,268 & 100 \\
+IHTC 2024 Test 05 & 300 & 59,900 & 118,583 & 56,472 & 100 \\
+IHTC 2024 Test 06 & 300 & 59,900 & 109,820 & 50,207 & 100 \\
+IHTC 2024 Test 07 & 300 & 59,900 & 138,207 & 131,048 & 100 \\
+IHTC 2024 Test 08 & 300 & 59,900 & 120,323 & 54,716 & 100 \\
+IHTC 2024 Test 09 & 300 & 59,900 & 118,060 & 63,923 & 100 \\
+IHTC 2024 Test 10 & 300 & 59,900 & 140,014 & 94,769 & 100 \\
+\bottomrule
+\end{tabular}%
+}
+\caption{MDEO-Cloud search diagnostics.}
+\label{tab:mdeo-diagnostics}
+\end{table}
+
+\subsection{Python-Based Diagnostics}
+
+\textit{To be completed by the author of the Python-based solution. Record only framework-specific diagnostics that are available and useful for explaining performance.}
+
+\reportsection{Interpretation}
+
+\subsection{Cross-Implementation Interpretation}
+
+Interpretation should be limited to the evidence in Tables~\ref{tab:instance-results} and~\ref{tab:feasibility-results} and the performance charts. It should state which approach achieved the lower common IHTC score, which was faster on smaller and larger instances, which constraints or search behaviours limited each approach, and whether the results are comparable across all completed instances. Full schedules, raw logs, Pareto fronts, and Excel exports should remain in the project repository or appendix.
+
+\reportsection{Qualitative Analysis}
+
+In addition to quantitative results, the experiment will include a qualitative comparison of the two frameworks based on implementation and debugging experience.
+
+\subsection{MDEO-Cloud Solution}
+
+\begin{enumerate}
+    \item \textbf{Installation and Deployment (ID):} assessing setup effort, environment configuration, and ease of execution.
+    \item \textbf{Documentation and Resources (DR):} evaluating documentation clarity, completeness, and usefulness of examples.
+    \item \textbf{Metamodel and Transformation Implementation (MT):} measuring the effort required to model the problem, implement transformations, and express optimisation behaviour.
+    \item \textbf{Objective and Constraint Implementation (OC):} assessing how easily objective functions and hard constraints can be expressed and maintained.
+    \item \textbf{Diagnostics and Error Handling (DE):} rating error message quality, debugging support, and fault localisation.
+    \item \textbf{Optimisation Configuration Usability (OU):} evaluating how easy it is to configure search parameters, solver settings, and experiment runs.
+\end{enumerate}
+
+\subsection{Python-Based Solution}
+
+\textit{To be completed by the author of the Python-based solution.}
+
+\reportsection{Limitations}
+
+\subsection{General Limitations}
+
+\begin{itemize}
+    \item \textbf{Benchmarking scope:} the evaluation is limited to the IHTC 2024 instances. Their resource mix, planning horizons, and demand patterns may not represent every hospital environment.
+    \item \textbf{Scope of conclusions:} the results compare two implementations on the selected IHTC benchmarks; they do not establish that either approach is superior for all healthcare scheduling settings.
+    \item \textbf{Implementation differences:} the two solutions may use different internal representations, search operators, and objective decompositions. The common post-processed IHTC score reduces this issue but does not make their search processes identical.
+    \item \textbf{Single-run sampling:} each instance is executed once because repeated runs of the larger instances are computationally expensive. The evaluation therefore reports observed outcomes rather than means, medians, confidence intervals, or statistical significance claims about stochastic-search reliability.
+    \item \textbf{Model and conversion fidelity:} results depend on the correctness of the conversion from IHTC input data to each implementation and on the completeness of each model's constraints and objective calculations.
+\end{itemize}
+
+\subsection{MDEO-Cloud Solution}
+
+\begin{itemize}
+    \item \textbf{Runtime comparability:} MDEO-Cloud terminates after configured generations and evolutions rather than a wall-clock limit. Runtime therefore measures the computational cost of each implementation under its configured search budget, not an identical amount of computation.
+    \item \textbf{Fixed generation budget:} Test~10 reached the configured 300-generation limit without clear evidence of convergence. The reported Pareto candidates may therefore be inferior to solutions obtainable with a larger search budget.
+    \item \textbf{Pareto-solution selection:} MDEO-Cloud can return many final Pareto candidates from one execution. These candidates are correlated outputs of the same search and may represent different objective trade-offs, so they are not treated as independent samples and are not averaged. The final comparison will select the feasible candidate with the lowest common post-processed IHTC score. Until those scores are available, the reported MDEO selections are provisional and may use an explicit admission--coverage trade-off, as for Test~10.
+\end{itemize}
+
+\subsection{Python-Based Solution}
+
+\textit{To be completed by the author of the Python-based solution.}
+
+\reportsection{Consistency Notes}
+
+To keep the comparison valid, the final experiment document and implementation should ensure that:
+
+\begin{itemize}
+    \item terminology matches the IHTC metamodel;
+    \item objectives match the implemented objective functions;
+    \item constraints match the implemented transformations and validation logic;
+    \item both frameworks are evaluated on equivalent problem instances and solver conditions.
+\end{itemize}
+
+\begin{thebibliography}{9}
+
+\bibitem{ceschia2025ihtc}
+S.~Ceschia, R.~M.~Rosati, A.~Schaerf, P.~Smet, G.~Vanden Berghe, and E.~Zanazzo,
+``The integrated healthcare timetabling competition 2024,''
+\textit{Operations Research, Data Analytics and Logistics}, vol.~45, art.~200481, 2025.
+
+\bibitem{deb2002nsga2}
+K.~Deb, A.~Pratap, S.~Agarwal, and T.~Meyarivan,
+``A fast and elitist multiobjective genetic algorithm: NSGA-II,''
+\textit{IEEE Transactions on Evolutionary Computation}, vol.~6, no.~2, pp.~182--197, 2002.
+
+\bibitem{krieger2026mdeo}
+N.~Krieger,
+\textit{A Cloud-Based Platform for Model-Driven Evolutionary Optimization},
+Master's thesis, University of Stuttgart, 2026.
+
+\end{thebibliography}
+
+\end{document}
