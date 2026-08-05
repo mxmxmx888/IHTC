@@ -127,10 +127,11 @@ Objective functions calculate resource use and nursing demand from the current a
 \begin{itemize}
     \item maximise admitted patients.
     \item minimise unscheduled optional patients and admission delay.
-    \item minimise room, surgeon, and operating-theatre capacity violations.
+    \item minimise aggregate surgeon and operating-theatre operating-time excess.
     \item minimise uncovered room-shifts and nursing workload.
     \item minimise excess and imbalanced nurse workload.
     \item minimise inactive nurse assignments.
+    \item minimise room-occupancy standard deviation.
 \end{itemize}
 
 \subsection{Python-Based Solution}
@@ -146,14 +147,16 @@ In contrast to the iterative evolutionary search of MDEO-Cloud, the MILP approac
 
 \subsection{MDEO-Cloud Solution}
 
-The MDEO-Cloud solution enforces feasibility through transformation guards and one configuration-level constraint. Transformation guards prevent invalid scheduling or nurse-assignment moves from being applied, while objective functions measure remaining solution-quality penalties.
+The MDEO-Cloud solution uses one configuration-level constraint and a set of transformation guards. The configuration-level constraint enforces completion of the nurse-assignment phase and admission of every mandatory patient. Guards enforce the remaining scheduling and nurse-assignment rules before a transformation is applied. They check that an individual admission fits the selected surgeon and theatre availability records. Aggregate surgeon and theatre operating-time excess across all patients on a day is evaluated by the objective functions.
 
 \begin{itemize}
-    \item \textbf{Phase consistency:} the \texttt{nurseAssignmentPhaseConsistency} constraint requires the final candidate to be in the \texttt{NURSES} phase and requires every mandatory patient to have an admission. Nurse assignments are not permitted during the \texttt{PATIENTS} phase.
+    \item \textbf{Phase consistency:} the \texttt{nurseAssignmentPhaseConsistency} constraint returns a non-zero violation for a final candidate in the \texttt{PATIENTS} phase. In the \texttt{NURSES} phase, it returns the number of mandatory patients without an admission. A valid final candidate must therefore reach \texttt{NURSES} and admit every mandatory patient. The \texttt{mandatoryPatientsAdmitted()} function is a helper and is not configured as a constraint.
+
+    \item \textbf{Admission scope and uniqueness:} transformations T1--T3 add only unscheduled, non-mandatory patients and prevent duplicate admissions for the selected patient. T4 removes optional patients only, T5 and T7 may remove any scheduled patient, and T6 replaces optional patients.
 
     \item \textbf{Patient admission window:} a new admission day must lie between the patient's release date and due date, and the complete patient stay must remain within the decision horizon.
 
-    \item \textbf{Surgeon and theatre feasibility:} a patient can only be admitted when their assigned surgeon has sufficient operating time on the selected day and the selected theatre has positive available capacity on that day.
+    \item \textbf{Surgeon and theatre feasibility:} admission, day-move, and theatre-move transformations link each patient to their assigned surgeon and require the individual surgery duration to fit the selected surgeon availability record. They also require a theatre availability record with positive capacity on the chosen day. Aggregate daily capacity excess is evaluated as an objective.
 
     \item \textbf{Room compatibility:} a patient cannot be assigned to a room listed in their incompatible rooms.
 
@@ -161,13 +164,17 @@ The MDEO-Cloud solution enforces feasibility through transformation guards and o
 
     \item \textbf{Room age-group compatibility:} each occupied room-day must either be empty or already contain patients from the same age group. Patients from different age groups cannot be mixed in the same room on the same day.
 
+    \item \textbf{Room-state consistency:} admission, removal, and reassignment transformations update \texttt{occupiedBeds} for every room-day in the stay and maintain \texttt{AgeGroup.EMPTY} when a room-day becomes unoccupied.
+
+    \item \textbf{Transformation phase control:} transformations T4--T13 operate during the \texttt{PATIENTS} phase, and T14--T16 require \texttt{NURSES}. T1--T3 may add optional patients in either phase. The one-way transition to \texttt{NURSES} is available only after every mandatory patient has been scheduled.
+
     \item \textbf{Nurse availability:} a nurse can only be assigned to a room-day-shift when they have a matching \texttt{NurseWorkingShift} on the same day and shift.
 
     \item \textbf{Nurse skill compatibility:} a nurse assignment is rejected if any patient demand contributing to the target room-day-shift requires a higher skill level than that nurse possesses.
 
     \item \textbf{Active nurse assignments:} nurses can only be assigned to room-day-shift slots for which a current admission and patient-day demand generate nursing demand. Duplicate assignments to the same slot are prevented.
 
-    \item \textbf{Objective-based violations:} total room capacity excess, surgeon capacity excess, theatre capacity excess, uncovered room-shifts, uncovered workload, nurse workload excess, inactive nurse assignments, and workload imbalance are minimised as objective values rather than configuration-level hard constraints.
+    \item \textbf{Objective-based penalties:} aggregate surgeon and theatre operating-time excess, nurse workload excess, uncovered room-shifts, uncovered workload, workload imbalance, inactive nurse assignments, admission delay, room-occupancy standard deviation, and unscheduled optional patients are minimised as objective values.
 \end{itemize}
 
 \subsection{Python-Based Solution}
@@ -188,7 +195,7 @@ Resource excess conditions, age-group mixing, uncovered nursing workload, nurse 
 
 \reportsection{Evaluation Metrics}
 
-The experiment evaluates solutions in two stages: feasibility first, followed by solution quality and search performance. Every final schedule is independently checked against the full hard-constraint set. A run is feasible only when it has no hard-constraint violations. If no feasible candidate is produced within the time limit, the run is classified as infeasible and does not contribute an IHTC score to feasible-solution quality summaries; its constraint-violation values are reported as diagnostics instead.
+The experiment evaluates solutions in two stages: feasibility first, followed by solution quality and search performance. Every final schedule is independently checked against the full hard-constraint set. A run is feasible only when it has no hard-constraint violations. If no feasible candidate is produced within the time limit, the run is classified as infeasible and is excluded from feasible-solution quality summaries. Its constraint-violation values are reported as diagnostics instead.
 
 \subsection{MDEO-Cloud Solution}
 
@@ -208,7 +215,7 @@ The experiment evaluates solutions in two stages: feasibility first, followed by
     \item Total and mean admission delay, measured from each patient's release date to their admission day.
     \item Number of open operating theatres per day.
     \item Number of theatres used by each surgeon per day.
-    \item Room age-mixing cost, where age mixing is treated as a soft constraint by an implementation.
+    \item Room age-group compatibility violations, reported as a hard-constraint diagnostic.
 \end{itemize}
 
 \subsubsection{Nurse Assignment Metrics}
@@ -236,9 +243,8 @@ For each MDEO-Cloud execution, the report records:
 \begin{itemize}
     \item wall-clock runtime, number of candidate evaluations, and number of completed generations;
     \item time and candidate evaluations to the first feasible solution, where available from the execution log;
-    \item time and candidate evaluations to a pre-defined target IHTC score, where a common score has been calculated;
     \item transformation attempts, successful transformations, and skipped or no-match transformations;
-    \item final common IHTC score and final feasibility status;
+    \item final feasibility status and the selected candidate's objective and diagnostic values;
     \item time to the best solution found during the execution.
 \end{itemize}
 
@@ -275,7 +281,7 @@ For the completed MDEO-Cloud executions, the workflow was:
     \item \textbf{Termination:} MDEO-Cloud used no wall-clock time limit. Each run terminated after its configured number of generations and evolutions; wall-clock duration was recorded as an experimental result.
     \item \textbf{Optimisation Execution:} the framework was run with the implemented metamodel, transformations, constraints, and objective functions.
     \item \textbf{Schedule Generation:} final model solutions, including admissions and room-shift nurse assignments, were obtained.
-    \item \textbf{Pareto Selection:} the final feasible Pareto candidates were retained. Once the common IHTC score has been calculated, the lowest-scoring candidate will be selected for the final cross-implementation comparison; the current MDEO selections are provisional.
+    \item \textbf{Pareto Selection:} the final feasible Pareto candidates were retained. Each reported candidate is selected using an explicit instance-level rule based on the reported measures. Tests~01--09 use the feasible candidate with the highest number of admitted patients. Test~10 uses an admissions-and-nursing-coverage trade-off.
     \item \textbf{Result Export:} final schedules were exported or converted into a readable format for analysis.
     \item \textbf{Data Collection:} objective values, violations, runtime behaviour, and final schedule statistics were recorded for comparison.
 \end{itemize}
@@ -288,12 +294,12 @@ For the completed MDEO-Cloud executions, the workflow was:
 
 \subsection{MDEO-Cloud Solution}
 
-Results are reported separately for each benchmark instance. The common post-processed IHTC score and wall-clock runtime are the primary quantitative outcomes; feasibility, coverage, resource utilisation, and search-efficiency measures provide supporting explanation. Raw scores are not pooled across instances because the instances differ substantially in scale.
+Results are reported separately for each benchmark instance. Feasibility, patient admissions, nursing coverage and workload, resource utilisation, runtime, and search-efficiency measures provide the quantitative evidence. The evaluation does not reduce these measures to a single score, and implementation-specific objective values remain in their own context. Results are not pooled across instances because the instances differ substantially in scale.
 
 For each instance, the following values are recorded where available:
 
 \begin{itemize}
-    \item final common IHTC score and feasibility status;
+    \item final feasibility status and selected objective and diagnostic values;
     \item wall-clock runtime, candidate evaluations, and completed generations;
     \item patient-admission, nursing-coverage, resource-utilisation, and constraint-diagnostic values.
 \end{itemize}
@@ -308,30 +314,30 @@ These measures support the comparison of optimisation quality, runtime, and scal
 
 \subsection{Per-Instance Comparison}
 
-Table~\ref{tab:instance-results} is the primary comparison table. The final comparison will select the feasible Pareto candidate with the lowest common post-processed IHTC score for each framework. The archived MDEO reports do not contain this common score, so the current MDEO rows are provisional and scores are marked as N/A. Tests~01--09 use the feasible candidate with the highest number of admitted patients. For Test~10, the reported candidate instead balances admissions with nursing coverage: it admits 349 patients, includes 44 nurse assignments, and has the lowest uncovered nursing workload among the resource-feasible candidates. The Python-based result should use the same final score and feasibility policy.
+Table~\ref{tab:instance-results} reports per-instance feasibility and runtime. Selection of MDEO-Cloud Pareto candidates uses documented instance-level criteria rather than a common score. Tests~01--09 use the feasible candidate with the highest number of admitted patients. For Test~10, the reported candidate balances admissions with nursing coverage: it admits 349 patients, includes 44 nurse assignments, and has the lowest uncovered nursing workload among the resource-feasible candidates. The associated feasibility, coverage, resource, and runtime measures are reported separately.
 
 \begin{table}[htbp]
 \centering
 \scriptsize
 \resizebox{\textwidth}{!}{%
-\begin{tabular}{lrrrrrrr}
+\begin{tabular}{lrrrrr}
 \toprule
-\textbf{Instance} & \textbf{Patients} & \textbf{MDEO Feasible} & \textbf{MDEO Score} & \textbf{MDEO Time (s)} & \textbf{Python Feasible} & \textbf{Python Score} & \textbf{Python Time (s)} \\
+\textbf{Instance} & \textbf{Patients} & \textbf{MDEO Feasible} & \textbf{MDEO Time (s)} & \textbf{Python Feasible} & \textbf{Python Time (s)} \\
 \midrule
-IHTC 2024 Test 01 & 42  & Yes & N/A & 521  & -- & -- & -- \\
-IHTC 2024 Test 02 & 37  & Yes & N/A & 363  & -- & -- & -- \\
-IHTC 2024 Test 03 & 45  & Yes & N/A & 363  & -- & -- & -- \\
-IHTC 2024 Test 04 & 54  & Yes & N/A & 647  & -- & -- & -- \\
-IHTC 2024 Test 05 & 62  & Yes & N/A & 568  & -- & -- & -- \\
-IHTC 2024 Test 06 & 111 & Yes & N/A & 1,454 & -- & -- & -- \\
-IHTC 2024 Test 07 & 113 & Yes & N/A & 2,240 & -- & -- & -- \\
-IHTC 2024 Test 08 & 173 & Yes & N/A & 3,282 & -- & -- & -- \\
-IHTC 2024 Test 09 & 146 & Yes & N/A & 3,728 & -- & -- & -- \\
-IHTC 2024 Test 10 & 525 & Yes & N/A & 32,676 & -- & -- & -- \\
+IHTC 2024 Test 01 & 42  & Yes & 521  & -- & -- \\
+IHTC 2024 Test 02 & 37  & Yes & 363  & -- & -- \\
+IHTC 2024 Test 03 & 45  & Yes & 363  & -- & -- \\
+IHTC 2024 Test 04 & 54  & Yes & 647  & -- & -- \\
+IHTC 2024 Test 05 & 62  & Yes & 568  & -- & -- \\
+IHTC 2024 Test 06 & 111 & Yes & 1,454 & -- & -- \\
+IHTC 2024 Test 07 & 113 & Yes & 2,240 & -- & -- \\
+IHTC 2024 Test 08 & 173 & Yes & 3,282 & -- & -- \\
+IHTC 2024 Test 09 & 146 & Yes & 3,728 & -- & -- \\
+IHTC 2024 Test 10 & 525 & Yes & 32,676 & -- & -- \\
 \bottomrule
 \end{tabular}%
 }
-\caption{Per-instance comparison using the common post-processed IHTC score.}
+\caption{Per-instance feasibility and runtime results.}
 \label{tab:instance-results}
 \end{table}
 
@@ -387,7 +393,7 @@ Runtime was not determined by patient count alone: Test~09, with 146 patients, t
 
 For Test~10, the 300-generation budget did not show clear convergence. At the final generation, the search was still applying transformations and retained substantial trade-offs between patient admissions and nursing coverage. The reported 349-admission candidate was therefore selected as a balanced provisional solution rather than evidence that the search had reached its best attainable schedule.
 
-The common post-processed IHTC scores have not yet been calculated from the selected MDEO schedules, so a score-against-size chart is deferred until those values are available. No mean, standard deviation, or statistical significance claim is reported because each instance was executed once.
+No single score is calculated from the selected MDEO schedules. No mean, standard deviation, or statistical significance claim is reported because each instance was executed once.
 
 \subsubsection{Python-Based Solution}
 
@@ -430,7 +436,7 @@ IHTC 2024 Test 10 & 300 & 59,900 & 140,014 & 94,769 & 100 \\
 
 \subsection{Cross-Implementation Interpretation}
 
-Interpretation should be limited to the evidence in Tables~\ref{tab:instance-results} and~\ref{tab:feasibility-results} and the performance charts. It should state which approach achieved the lower common IHTC score, which was faster on smaller and larger instances, which constraints or search behaviours limited each approach, and whether the results are comparable across all completed instances. Full schedules, raw logs, Pareto fronts, and Excel exports should remain in the project repository or appendix.
+Interpretation should be limited to the evidence in Tables~\ref{tab:instance-results} and~\ref{tab:feasibility-results} and the performance charts. It should describe how feasibility, admissions, nursing coverage and workload, resource use, and runtime differed across completed instances, together with the constraints or search behaviours that limited each approach. Full schedules, raw logs, Pareto fronts, and Excel exports should remain in the project repository or appendix.
 
 \reportsection{Qualitative Analysis}
 
@@ -458,7 +464,7 @@ In addition to quantitative results, the experiment will include a qualitative c
 \begin{itemize}
     \item \textbf{Benchmarking scope:} the evaluation is limited to the IHTC 2024 instances. Their resource mix, planning horizons, and demand patterns may not represent every hospital environment.
     \item \textbf{Scope of conclusions:} the results compare two implementations on the selected IHTC benchmarks; they do not establish that either approach is superior for all healthcare scheduling settings.
-    \item \textbf{Implementation differences:} the two solutions may use different internal representations, search operators, and objective decompositions. The common post-processed IHTC score reduces this issue but does not make their search processes identical.
+    \item \textbf{Implementation differences:} the two solutions may use different internal representations, search operators, and objective decompositions. The reported measures must therefore be interpreted in their implementation-specific context.
     \item \textbf{Single-run sampling:} each instance is executed once because repeated runs of the larger instances are computationally expensive. The evaluation therefore reports observed outcomes rather than means, medians, confidence intervals, or statistical significance claims about stochastic-search reliability.
     \item \textbf{Model and conversion fidelity:} results depend on the correctness of the conversion from IHTC input data to each implementation and on the completeness of each model's constraints and objective calculations.
 \end{itemize}
@@ -468,7 +474,7 @@ In addition to quantitative results, the experiment will include a qualitative c
 \begin{itemize}
     \item \textbf{Runtime comparability:} MDEO-Cloud terminates after configured generations and evolutions rather than a wall-clock limit. Runtime therefore measures the computational cost of each implementation under its configured search budget, not an identical amount of computation.
     \item \textbf{Fixed generation budget:} Test~10 reached the configured 300-generation limit without clear evidence of convergence. The reported Pareto candidates may therefore be inferior to solutions obtainable with a larger search budget.
-    \item \textbf{Pareto-solution selection:} MDEO-Cloud can return many final Pareto candidates from one execution. These candidates are correlated outputs of the same search and may represent different objective trade-offs, so they are not treated as independent samples and are not averaged. The final comparison will select the feasible candidate with the lowest common post-processed IHTC score. Until those scores are available, the reported MDEO selections are provisional and may use an explicit admission--coverage trade-off, as for Test~10.
+    \item \textbf{Pareto-solution selection:} MDEO-Cloud can return many final Pareto candidates from one execution. These candidates are correlated outputs of the same search and may represent different objective trade-offs, so they are not treated as independent samples and are not averaged. The reported candidate for each instance follows an explicit selection rule based on the reported measures. Tests~01--09 use the feasible candidate with the highest number of admitted patients, while Test~10 uses an admission--coverage trade-off.
 \end{itemize}
 
 \subsection{Python-Based Solution}
