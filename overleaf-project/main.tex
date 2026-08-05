@@ -10,7 +10,9 @@
 \usepackage{enumitem}
 \usepackage{longtable}
 \usepackage{graphicx}
+\usepackage{pdflscape}
 \usepackage{titlesec}
+\usepackage{url}
 
 \setlength{\parindent}{0pt}
 \setlength{\parskip}{0.6em}
@@ -58,13 +60,13 @@ August 2026
 
 This experiment evaluates an MDEO-Cloud implementation against a Python-based optimiser for the International Hospital Timetabling Competition (IHTC) scheduling problem~\cite{ceschia2025ihtc}. Both solve the same integrated hospital-planning problem. Patients are assigned admission days, rooms, and operating theatres, after which nurses are allocated to the room-day-shift demand created by those assignments.
 
-The evaluation examines feasibility, schedule quality, and the computational effort needed to obtain a schedule. Each approach uses the same IHTC benchmark instances and input data, with optimisation budgets set on comparable terms. Observed differences can therefore be attributed to the implementation approach rather than to variations in the instance data or experimental configuration.
+The evaluation examines feasibility, schedule quality, and the computational effort needed to obtain a schedule. Each approach uses the same IHTC benchmark instances and input data. MDEO-Cloud executions use a fixed limit of 300 generations, regardless of whether the final candidate set has converged. Runtime results must also account for execution conditions, including the different thread allocation used for the MDEO-Cloud Test~10 run.
 
 The study records patient-admission outcomes, resource use, nursing coverage, constraint violations, and search-performance measures. It compares the results obtained on the selected benchmarks and considers the practical implications of using model-driven optimisation in MDEO-Cloud instead of a conventional Python implementation for hospital scheduling.
 
 \reportsection{Controlled Variables}
 
-Both implementations use the same IHTC benchmark instance and associated input data. This holds the scheduling problem constant while the implementation approach varies. Runtime, feasibility, and solution quality are recorded as experimental outcomes.
+Both implementations use the same IHTC benchmark instance set and associated input data. This holds the scheduling problem constant while the implementation approach varies. Runtime, feasibility, and solution quality are recorded as experimental outcomes.
 
 \begin{itemize}
     \item \textbf{Patients and occupants:} patient priority, release and due dates, length of stay, surgery duration, assigned surgeon, room compatibility, and existing occupants.
@@ -114,11 +116,11 @@ Test labels do not rank the instances by size. For example, Test 02 contains few
 
 \reportsection{Optimisation Approaches}
 
-Both implementations should be evaluated using the same instance set and equivalent optimisation budgets.
+Both implementations should be evaluated using the same instance set. MDEO-Cloud runs terminate after 300 generations. Runtime comparisons require equivalent execution resources.
 
 \subsection{MDEO-Cloud Solution}
 
-The MDEO-Cloud implementation encodes each IHTC instance as a typed model. Patients, admissions, resources, availability records, nursing-demand records, and nurse assignments are represented as explicit model elements. Each candidate schedule is stored as a complete model instance and processed within the MDEO-Cloud platform~\cite{krieger2026mdeo}.
+The MDEO-Cloud implementation encodes each IHTC instance as a typed model. Patients, admissions, resources, availability records, nursing-demand records, and nurse assignments are represented as explicit model elements. During conversion, every mandatory patient is initialised as scheduled and linked to an admission; optional patients remain unscheduled. Each candidate schedule is stored as a complete model instance and processed within the MDEO-Cloud platform~\cite{krieger2026mdeo}.
 
 NSGA-II~\cite{deb2002nsga2} explores candidate schedules through model transformations. These transformations add, remove, or reassign patient admissions, rooms, admission days, and operating theatres. They also create, remove, and move nurse assignments between room-day-shift slots. Guards reject infeasible changes before the transformations are applied. A phase state transfers the search from patient scheduling to nurse assignment after all mandatory patients have been admitted.
 
@@ -126,7 +128,8 @@ Objective functions calculate resource use and nursing demand from the current a
 
 \begin{itemize}
     \item maximise admitted patients.
-    \item minimise unscheduled optional patients and admission delay.
+    \item minimise the unscheduled-patient penalty, which applies a higher penalty to mandatory patients, and minimise admission delay.
+    \item minimise room-capacity violation and missing mandatory-patient admissions as redundant safeguard objectives. These do not replace hard enforcement: room capacity is guarded by transformations, while the configured phase-consistency constraint requires every mandatory patient to be admitted in a final candidate.
     \item minimise aggregate surgeon and operating-theatre operating-time excess.
     \item minimise uncovered room-shifts and nursing workload.
     \item minimise excess and imbalanced nurse workload.
@@ -152,7 +155,7 @@ The MDEO-Cloud solution uses one configuration-level constraint and a set of tra
 \begin{itemize}
     \item \textbf{Phase consistency:} the \texttt{nurseAssignmentPhaseConsistency} constraint returns a non-zero violation for a final candidate in the \texttt{PATIENTS} phase. In the \texttt{NURSES} phase, it returns the number of mandatory patients without an admission. A valid final candidate must therefore reach \texttt{NURSES} and admit every mandatory patient. The \texttt{mandatoryPatientsAdmitted()} function is a helper and is not configured as a constraint.
 
-    \item \textbf{Admission scope and uniqueness:} transformations T1--T3 add only unscheduled, non-mandatory patients and prevent duplicate admissions for the selected patient. T4 removes optional patients only, T5 and T7 may remove any scheduled patient, and T6 replaces optional patients.
+    \item \textbf{Admission scope and uniqueness:} mandatory admissions are created during model conversion rather than by optimisation transformations. Transformations T1--T3 add only unscheduled, non-mandatory patients and prevent duplicate admissions for the selected patient. T4 removes optional patients only, T5 and T7 may remove any scheduled patient, and T6 replaces optional patients. A final model missing a mandatory admission remains infeasible through \texttt{nurseAssignmentPhaseConsistency}.
 
     \item \textbf{Patient admission window:} a new admission day must lie between the patient's release date and due date, and the complete patient stay must remain within the decision horizon.
 
@@ -174,7 +177,7 @@ The MDEO-Cloud solution uses one configuration-level constraint and a set of tra
 
     \item \textbf{Active nurse assignments:} nurses can only be assigned to room-day-shift slots for which a current admission and patient-day demand generate nursing demand. Duplicate assignments to the same slot are prevented.
 
-    \item \textbf{Objective-based penalties:} aggregate surgeon and theatre operating-time excess, nurse workload excess, uncovered room-shifts, uncovered workload, workload imbalance, inactive nurse assignments, admission delay, room-occupancy standard deviation, and unscheduled optional patients are minimised as objective values.
+    \item \textbf{Objective-based penalties:} the unscheduled-patient penalty, room-capacity violation, missing mandatory-patient admissions, aggregate surgeon and theatre operating-time excess, nurse workload excess, uncovered room-shifts, uncovered workload, workload imbalance, inactive nurse assignments, admission delay, and room-occupancy standard deviation are minimised as objective values. The room-capacity and missing-mandatory-admission objectives are redundant safeguards alongside their hard enforcement.
 \end{itemize}
 
 \subsection{Python-Based Solution}
@@ -195,15 +198,15 @@ Resource excess conditions, age-group mixing, uncovered nursing workload, nurse 
 
 \reportsection{Evaluation Metrics}
 
-The experiment evaluates solutions in two stages: feasibility first, followed by solution quality and search performance. Every final schedule is independently checked against the full hard-constraint set. A run is feasible only when it has no hard-constraint violations. If no feasible candidate is produced within the time limit, the run is classified as infeasible and is excluded from feasible-solution quality summaries. Its constraint-violation values are reported as diagnostics instead.
+The experiment evaluates solutions in two stages: feasibility first, followed by solution quality and search performance. For MDEO-Cloud, feasibility is an implementation-derived classification rather than the result of a separate post-run validator. A final MDEO-Cloud model is feasible when \texttt{nurseAssignmentPhaseConsistency} returns zero, which requires the model to be in the \texttt{NURSES} phase with every mandatory patient admitted, and when its state has been produced through transformations whose guards preserve the specified hard scheduling invariants. If no MDEO-Cloud model meets this classification after the fixed 300-generation limit, the run is classified as infeasible and excluded from feasible-solution quality summaries. Its diagnostic and objective values are reported instead.
 
 \subsection{MDEO-Cloud Solution}
 
 \subsubsection{Feasibility Metrics}
 
 \begin{itemize}
-    \item Final feasibility status: whether the selected final candidate has no hard-constraint violations.
-    \item Hard-constraint diagnostics: each hard-constraint type is reported separately. For quantitative constraints, magnitude is measured in its natural unit, such as excess beds, operating time, or nurse workload. For Boolean constraints, magnitude is the number of invalid assignments or room-days. These values are diagnostic and are not weighted.
+    \item Final feasibility status: whether the reported final candidate satisfies the MDEO-Cloud feasibility classification: zero \texttt{nurseAssignmentPhaseConsistency} and a state reached through the guarded transformations.
+    \item Reported hard diagnostic: room-capacity status derived from the final model state. Admission windows, incompatible rooms, age-group compatibility, and nurse-assignment rules are enforced by transformation guards during search; they are not independently audited as post-run violation counts. Theatre and surgeon operating-time excess, together with uncovered workload, are tabulated as objective values. Nurse workload excess is retained only in the raw Pareto-front outcomes.
     \item Mandatory-patient completion rate: proportion of mandatory patients that receive an admission.
 \end{itemize}
 
@@ -215,42 +218,41 @@ The experiment evaluates solutions in two stages: feasibility first, followed by
     \item Total and mean admission delay, measured from each patient's release date to their admission day.
     \item Number of open operating theatres per day.
     \item Number of theatres used by each surgeon per day.
-    \item Room age-group compatibility violations, reported as a hard-constraint diagnostic.
+    \item Room age-group compatibility: enforced by transformation guards during search and not reported as a post-run violation count.
 \end{itemize}
 
 \subsubsection{Nurse Assignment Metrics}
 
-\begin{itemize}
-    \item Active room-shift coverage rate: proportion of room-day-shift slots with derived patient demand that receive a nurse assignment.
-    \item Uncovered workload: total workload associated with active room-shift slots without nurse cover.
-    \item Nurse workload excess: total workload above the maximum workload of the corresponding nurse working shift.
-    \item Nurse skill shortfall: total difference between required and assigned nurse skill levels.
-    \item Nurse workload imbalance, measured using the variance of total workload assigned across nurses.
-\end{itemize}
-
-\subsubsection{Resource Utilisation Metrics}
+The stored Pareto-front outcomes retain objective values for uncovered room-shifts, uncovered workload, nurse workload excess, and nurse workload imbalance. Of these, only uncovered workload is presented in the final results table; the remaining values are available in the raw MDEO-Cloud run outputs but are not tabulated in this report.
 
 \begin{itemize}
-    \item Room-bed utilisation: occupied room-bed days as a proportion of available room-bed days.
-    \item Operating-theatre utilisation: scheduled operating time as a proportion of available theatre time.
-    \item Surgeon utilisation: scheduled operating time as a proportion of each surgeon's available operating time.
+    \item \textbf{Reported metric --- uncovered workload:} total workload associated with active room-shift slots without nurse cover.
+    \item \textbf{Raw outcome metrics --- uncovered room-shifts, nurse workload excess, and nurse workload imbalance:} retained in the Pareto-front objective values but not tabulated in the final results.
+    \item \textbf{Nurse skill compatibility:} enforced by transformation guards. Although \texttt{totalSkillLevelViolation()} is defined and imported, it is not configured as a goal objective or formal constraint and is not reported as a final numeric metric.
 \end{itemize}
+
+\subsubsection{Reported Resource Measures}
+
+\begin{itemize}
+    \item \textbf{Reported hard diagnostic --- room capacity:} the final room-capacity status shown in Table~\ref{tab:feasibility-results}.
+    \item \textbf{Reported objective measures --- theatre and surgeon operating-time excess:} aggregate excess values shown in Table~\ref{tab:feasibility-results}.
+\end{itemize}
+
+Room-bed, theatre, and surgeon utilisation ratios were not exported or reported for the completed MDEO-Cloud runs.
 
 \subsubsection{Search Performance Metrics}
 
-For each MDEO-Cloud execution, the report records:
+For each MDEO-Cloud execution, the reported search measures are:
 
 \begin{itemize}
-    \item wall-clock runtime, number of candidate evaluations, and number of completed generations;
-    \item time and candidate evaluations to the first feasible solution, where available from the execution log;
-    \item transformation attempts, successful transformations, and skipped or no-match transformations;
-    \item final feasibility status and the selected candidate's objective and diagnostic values;
-    \item time to the best solution found during the execution.
+    \item wall-clock runtime, completed generations, and candidate evaluations;
+    \item executed and skipped transformations, and the number of Pareto solutions;
+    \item final feasibility status and the final model's objective and diagnostic values;
 \end{itemize}
 
 \subsubsection{Reporting}
 
-Results are reported as a set of feasibility, patient-scheduling, nurse-assignment, resource-utilisation, and search-performance measures. The evaluation does not combine these measures into a single score. Some constraints are represented as hard conditions in one implementation and as soft penalties in the other, so implementation-specific objective values and penalty totals are interpreted in their own context. MDEO-Cloud diagnostics include removed admissions, inactive nurse assignments, room-occupancy standard deviation, and transformation skip rate.
+Results are reported as a set of feasibility, patient-scheduling, nurse-assignment, resource-related, and search-performance measures. The evaluation does not combine these measures into a single score. Some constraints are represented as hard conditions in one implementation and as soft penalties in the other, so implementation-specific objective values and penalty totals are interpreted in their own context. MDEO-Cloud raw outcomes include missing mandatory admissions, inactive nurse assignments, room-occupancy standard deviation, and transformation skip rate.
 
 \subsection{Python-Based Solution}
 Evaluation of the MILP implementation follows the same two-stage framework: feasibility verification followed by solution quality assessment. A candidate schedule is only regarded as valid if all hard constraints are fully satisfied without violation. All feasible solutions are then evaluated using the unified official IHTC weighted cost function, which aggregates the eight soft penalty components S1–S8 as the primary comparison metric.
@@ -261,13 +263,13 @@ Solver performance is recorded via wall-clock runtime and final solver status (o
 
 \reportsection{System Hardware}
 
-The MDEO-Cloud experiments were executed on a system with an AMD Ryzen 9 9950X3D processor and 96\,GB of DDR5 RAM. Tests 01--09 ran on a development virtual machine hosted on this hardware, with a smaller allocation of CPU threads. Test 10 received additional threads because the earlier allocation would have made the execution impractically long. Its runtime should therefore be interpreted in light of this different resource allocation.
+The MDEO-Cloud experiments were executed on a system with an AMD Ryzen 9 9950X3D processor and 96\,GB of DDR5 RAM. Tests~01--09 ran on a development virtual machine hosted on this hardware, with a smaller allocation of CPU threads; the precise allocation was not retained. Test~10 used three MDEO execution nodes with eight threads each (24 threads in total) because the earlier allocation would have made the execution impractically long. Its runtime is therefore an annotated large-instance observation and is not directly comparable with Tests~01--09 as a like-for-like scalability result.
 
-For Test 10, the MDEO-Cloud script timeout and model-transformation timeout were each set to 60 seconds. These settings allowed longer transformations to complete during the larger benchmark run.
+For Test~10, the MDEO-Cloud script timeout and model-transformation timeout were each set to 60 seconds as safeguards. Neither threshold was reached, so these settings did not alter the run termination or its reported result.
 
 \reportsection{Experiment Procedure}
 
-Each benchmark instance is executed once per framework on the shared computer.
+Each benchmark instance is executed once per framework. For MDEO-Cloud, Tests~01--09 used the development virtual machine allocation, while Test~10 used additional CPU threads. The configured Test~10 safeguards were not reached.
 
 \subsection{MDEO-Cloud Solution}
 
@@ -278,10 +280,9 @@ For the completed MDEO-Cloud executions, the workflow was:
     \item \textbf{Model Conversion:} each test instance was converted into a valid MDEO-Cloud model representation.
     \item \textbf{Model Validation:} the converted models were checked for required entities, links, and availability objects.
     \item \textbf{Configuration:} solver hyperparameters were set, including population size, number of evolutions, and mutation settings.
-    \item \textbf{Termination:} MDEO-Cloud used no wall-clock time limit. Each run terminated after its configured number of generations and evolutions; wall-clock duration was recorded as an experimental result.
+    \item \textbf{Termination:} MDEO-Cloud used no whole-run wall-clock limit. Every run terminated after 300 generations, regardless of whether its candidate solutions had converged. Wall-clock duration was recorded as an experimental result. Test~10 also had 60-second script and model-transformation safeguards, but neither threshold was reached and they did not terminate the run.
     \item \textbf{Optimisation Execution:} the framework was run with the implemented metamodel, transformations, constraints, and objective functions.
     \item \textbf{Schedule Generation:} final model solutions, including admissions and room-shift nurse assignments, were obtained.
-    \item \textbf{Pareto Selection:} the final feasible Pareto candidates were retained. Each reported candidate is selected using an explicit instance-level rule based on the reported measures. Tests~01--09 use the feasible candidate with the highest number of admitted patients. Test~10 uses an admissions-and-nursing-coverage trade-off.
     \item \textbf{Result Export:} final schedules were exported or converted into a readable format for analysis.
     \item \textbf{Data Collection:} objective values, violations, runtime behaviour, and final schedule statistics were recorded for comparison.
 \end{itemize}
@@ -299,7 +300,7 @@ Results are reported separately for each benchmark instance. Feasibility, patien
 For each instance, the following values are recorded where available:
 
 \begin{itemize}
-    \item final feasibility status and selected objective and diagnostic values;
+    \item final feasibility status and final objective and diagnostic values;
     \item wall-clock runtime, candidate evaluations, and completed generations;
     \item patient-admission, nursing-coverage, resource-utilisation, and constraint-diagnostic values.
 \end{itemize}
@@ -314,7 +315,7 @@ These measures support the comparison of optimisation quality, runtime, and scal
 
 \subsection{Per-Instance Comparison}
 
-Table~\ref{tab:instance-results} reports per-instance feasibility and runtime. Selection of MDEO-Cloud Pareto candidates uses documented instance-level criteria rather than a common score. Tests~01--09 use the feasible candidate with the highest number of admitted patients. For Test~10, the reported candidate balances admissions with nursing coverage: it admits 349 patients, includes 44 nurse assignments, and has the lowest uncovered nursing workload among the resource-feasible candidates. The associated feasibility, coverage, resource, and runtime measures are reported separately.
+Table~\ref{tab:instance-results} reports per-instance feasibility and runtime. The associated feasibility, coverage, resource, and runtime measures are reported separately.
 
 \begin{table}[htbp]
 \centering
@@ -333,67 +334,69 @@ IHTC 2024 Test 06 & 111 & Yes & 1,454 & -- & -- \\
 IHTC 2024 Test 07 & 113 & Yes & 2,240 & -- & -- \\
 IHTC 2024 Test 08 & 173 & Yes & 3,282 & -- & -- \\
 IHTC 2024 Test 09 & 146 & Yes & 3,728 & -- & -- \\
-IHTC 2024 Test 10 & 525 & Yes & 32,676 & -- & -- \\
+IHTC 2024 Test 10$^\ast$ & 525 & Yes & 32,676 & -- & -- \\
 \bottomrule
 \end{tabular}%
 }
-\caption{Per-instance feasibility and runtime results.}
+\caption{Per-instance feasibility and runtime results. $^\ast$Test~10 used additional CPU threads; its runtime is an annotated large-instance observation and is not directly comparable with Tests~01--09.}
 \label{tab:instance-results}
 \end{table}
 
 \subsection{Feasibility and Constraint Results}
 
-Table~\ref{tab:feasibility-results} records feasibility separately from solution quality. Capacity violations report room, theatre, and surgeon excess in the form \texttt{room/theatre/surgeon}; uncovered nursing workload is reported even when it is treated as a soft objective. The reported MDEO candidates have zero recorded constraints and resource-capacity violations. Tests~01--09 are selected by the highest number of admitted patients; Test~10 is selected for its admission--nursing coverage trade-off.
+Table~\ref{tab:feasibility-results} distinguishes the implementation-derived feasibility classification and reported room-capacity diagnostic from objective measures. Theatre operating-time excess, surgeon operating-time excess, and uncovered nursing workload are objective values. A feasible candidate may therefore have non-zero values for these objective measures.
 
-{\footnotesize
+\begin{landscape}
+{\scriptsize
 \setlength{\tabcolsep}{3pt}
-\begin{longtable}{llrrrrr}
-\caption{Feasibility and constraint results by framework.}\label{tab:feasibility-results}\\
+\begin{longtable}{llrrrrrrr}
+\caption{Feasibility, hard room-capacity diagnostics, and reported objective measures by framework.}\label{tab:feasibility-results}\\
 \toprule
-\textbf{Instance} & \textbf{Framework} & \textbf{Feasible} & \textbf{Mandatory} & \textbf{All Patients} & \textbf{Capacity} & \textbf{Uncovered} \\
-& & & \textbf{Admitted} & \textbf{Admitted} & \textbf{Violations} & \textbf{Workload} \\
+\textbf{Instance} & \textbf{Framework} & \textbf{Feasible} & \textbf{Mandatory} & \textbf{All Patients} & \textbf{Room Capacity} & \textbf{Theatre Excess} & \textbf{Surgeon Excess} & \textbf{Uncovered} \\
+& & & \textbf{Admitted} & \textbf{Admitted} & \textbf{(Hard)} & \textbf{(Objective)} & \textbf{(Objective)} & \textbf{Workload (Objective)} \\
 \midrule
 \endfirsthead
 \toprule
-\textbf{Instance} & \textbf{Framework} & \textbf{Feasible} & \textbf{Mandatory} & \textbf{All Patients} & \textbf{Capacity} & \textbf{Uncovered} \\
-& & & \textbf{Admitted} & \textbf{Admitted} & \textbf{Violations} & \textbf{Workload} \\
+\textbf{Instance} & \textbf{Framework} & \textbf{Feasible} & \textbf{Mandatory} & \textbf{All Patients} & \textbf{Room Capacity} & \textbf{Theatre Excess} & \textbf{Surgeon Excess} & \textbf{Uncovered} \\
+& & & \textbf{Admitted} & \textbf{Admitted} & \textbf{(Hard)} & \textbf{(Objective)} & \textbf{(Objective)} & \textbf{Workload (Objective)} \\
 \midrule
 \endhead
-IHTC 2024 Test 01 & MDEO-Cloud & Yes & 11/11 & 31/42 & 0/0/0 & 959 \\
-IHTC 2024 Test 01 & Python & -- & -- & -- & -- & -- \\
-IHTC 2024 Test 02 & MDEO-Cloud & Yes & 12/12 & 32/37 & 0/0/0 & 1,034 \\
-IHTC 2024 Test 02 & Python & -- & -- & -- & -- & -- \\
-IHTC 2024 Test 03 & MDEO-Cloud & Yes & 12/12 & 18/45 & 0/0/0 & 352 \\
-IHTC 2024 Test 03 & Python & -- & -- & -- & -- & -- \\
-IHTC 2024 Test 04 & MDEO-Cloud & Yes & 32/32 & 50/54 & 0/0/0 & 1,418 \\
-IHTC 2024 Test 04 & Python & -- & -- & -- & -- & -- \\
-IHTC 2024 Test 05 & MDEO-Cloud & Yes & 19/19 & 26/62 & 0/0/0 & 603 \\
-IHTC 2024 Test 05 & Python & -- & -- & -- & -- & -- \\
-IHTC 2024 Test 06 & MDEO-Cloud & Yes & 50/50 & 68/111 & 0/0/0 & 1,772 \\
-IHTC 2024 Test 06 & Python & -- & -- & -- & -- & -- \\
-IHTC 2024 Test 07 & MDEO-Cloud & Yes & 55/55 & 67/113 & 0/0/0 & 2,014 \\
-IHTC 2024 Test 07 & Python & -- & -- & -- & -- & -- \\
-IHTC 2024 Test 08 & MDEO-Cloud & Yes & 39/39 & 77/173 & 0/0/0 & 2,017 \\
-IHTC 2024 Test 08 & Python & -- & -- & -- & -- & -- \\
-IHTC 2024 Test 09 & MDEO-Cloud & Yes & 88/88 & 98/146 & 0/0/0 & 2,960 \\
-IHTC 2024 Test 09 & Python & -- & -- & -- & -- & -- \\
-IHTC 2024 Test 10 & MDEO-Cloud & Yes & 349/349 & 349/525 & 0/0/0 & 9,289 \\
-IHTC 2024 Test 10 & Python & -- & -- & -- & -- & -- \\
+IHTC 2024 Test 01 & MDEO-Cloud & Yes & 11/11 & 31/42 & 0 & 0 & 0 & 959 \\
+IHTC 2024 Test 01 & Python & -- & -- & -- & -- & -- & -- & -- \\
+IHTC 2024 Test 02 & MDEO-Cloud & Yes & 12/12 & 32/37 & 0 & 0 & 0 & 1,034 \\
+IHTC 2024 Test 02 & Python & -- & -- & -- & -- & -- & -- & -- \\
+IHTC 2024 Test 03 & MDEO-Cloud & Yes & 12/12 & 18/45 & 0 & 0 & 0 & 352 \\
+IHTC 2024 Test 03 & Python & -- & -- & -- & -- & -- & -- & -- \\
+IHTC 2024 Test 04 & MDEO-Cloud & Yes & 32/32 & 50/54 & 0 & 0 & 0 & 1,418 \\
+IHTC 2024 Test 04 & Python & -- & -- & -- & -- & -- & -- & -- \\
+IHTC 2024 Test 05 & MDEO-Cloud & Yes & 19/19 & 26/62 & 0 & 0 & 0 & 603 \\
+IHTC 2024 Test 05 & Python & -- & -- & -- & -- & -- & -- & -- \\
+IHTC 2024 Test 06 & MDEO-Cloud & Yes & 50/50 & 68/111 & 0 & 0 & 0 & 1,772 \\
+IHTC 2024 Test 06 & Python & -- & -- & -- & -- & -- & -- & -- \\
+IHTC 2024 Test 07 & MDEO-Cloud & Yes & 55/55 & 67/113 & 0 & 0 & 0 & 2,014 \\
+IHTC 2024 Test 07 & Python & -- & -- & -- & -- & -- & -- & -- \\
+IHTC 2024 Test 08 & MDEO-Cloud & Yes & 39/39 & 77/173 & 0 & 0 & 0 & 2,017 \\
+IHTC 2024 Test 08 & Python & -- & -- & -- & -- & -- & -- & -- \\
+IHTC 2024 Test 09 & MDEO-Cloud & Yes & 88/88 & 98/146 & 0 & 0 & 0 & 2,960 \\
+IHTC 2024 Test 09 & Python & -- & -- & -- & -- & -- & -- & -- \\
+IHTC 2024 Test 10 & MDEO-Cloud & Yes & 349/349 & 349/525 & 0 & 0 & 0 & 9,289 \\
+IHTC 2024 Test 10 & Python & -- & -- & -- & -- & -- & -- & -- \\
 \bottomrule
 \end{longtable}
 }
+\end{landscape}
 
 \subsection{Performance and Scalability}
 
 \subsubsection{MDEO-Cloud Solution}
 
-Tests~01--10 completed with the same fixed budget of 300 generations and 59,900 candidate evaluations. Observed runtime ranged from 363~s for Test~02 (37 patients) to 32,676~s for Test~10 (525 patients). The smaller cases with 37--62 patients completed in 363--647~s, cases with 111--173 patients took 1,454--3,728~s, and Test~10 required approximately 9~hours and 5~minutes. This indicates a substantial increase in execution time as instances become larger and more structurally complex.
+Tests~01--10 each terminated after the fixed limit of 300 generations. Each run recorded 59,900 candidate evaluations, which is an observed search measure rather than an additional termination limit. Tests~01--09 used the same development virtual machine allocation and provide the internally comparable runtime trend: the smaller cases with 37--62 patients completed in 363--647~s, while cases with 111--173 patients took 1,454--3,728~s. Test~10, which has 525 patients, used additional CPU threads and recorded 32,676~s (approximately 9~hours and 5~minutes). Its 60-second script and model-transformation safeguards were never reached. Test~10 is therefore retained as an annotated large-instance observation, rather than a directly comparable measurement of the Tests~01--09 scalability trend.
 
-Runtime was not determined by patient count alone: Test~09, with 146 patients, took longer than Test~08, with 173 patients. The difference is consistent with the variation in executed and skipped transformations shown in Table~\ref{tab:mdeo-diagnostics}, but a single execution per instance cannot isolate the effect of any individual instance characteristic. Test~10 also had substantially more candidate patients than the preceding instances, so its runtime cannot be attributed to patient count alone.
+Runtime was not determined by patient count alone: Test~09, with 146 patients, took longer than Test~08, with 173 patients. This difference is consistent with the variation in executed and skipped transformations shown in Table~\ref{tab:mdeo-diagnostics}, but a single execution per instance cannot isolate the effect of any individual instance characteristic. The same caution applies more strongly to Test~10: it has substantially more candidate patients but different execution resources, so its recorded runtime cannot be attributed to patient count or instance structure alone. The unused safeguards did not terminate or otherwise alter the run.
 
-For Test~10, the 300-generation budget did not show clear convergence. At the final generation, the search was still applying transformations and retained substantial trade-offs between patient admissions and nursing coverage. The reported 349-admission candidate was therefore selected as a balanced provisional solution rather than evidence that the search had reached its best attainable schedule.
+For Test~10, the 300-generation budget did not show clear convergence. At the final generation, the search was still applying transformations and retained substantial trade-offs between patient admissions and violation-related measures. The reported 349-admission schedule should therefore not be read as evidence that the search had reached its best attainable schedule.
 
-No single score is calculated from the selected MDEO schedules. No mean, standard deviation, or statistical significance claim is reported because each instance was executed once.
+No single score is calculated from the MDEO schedules reported in the results. No mean, standard deviation, or statistical significance claim is reported because each instance was executed once.
 
 \subsubsection{Python-Based Solution}
 
@@ -436,7 +439,13 @@ IHTC 2024 Test 10 & 300 & 59,900 & 140,014 & 94,769 & 100 \\
 
 \subsection{Cross-Implementation Interpretation}
 
-Interpretation should be limited to the evidence in Tables~\ref{tab:instance-results} and~\ref{tab:feasibility-results} and the performance charts. It should describe how feasibility, admissions, nursing coverage and workload, resource use, and runtime differed across completed instances, together with the constraints or search behaviours that limited each approach. Full schedules, raw logs, Pareto fronts, and Excel exports should remain in the project repository or appendix.
+Interpretation should be limited to the evidence in Tables~\ref{tab:instance-results} and~\ref{tab:feasibility-results}. It should describe how feasibility, admissions, nursing coverage and workload, resource use, and runtime differed across completed instances, together with the constraints or search behaviours that limited each approach. Test~10 runtime should be interpreted only in the context of its additional CPU threads, and should not be compared directly with another framework unless execution conditions are equivalent. Full schedules, raw logs, Pareto fronts, and Excel exports should remain in the project repository or appendix.
+
+\subsection{Comparison with Existing GIPS-Based Results}
+
+The literature also provides a useful external reference point through the recent GIPS-based MILP implementation reported for the IHTC 2024 problem~\cite{kratz2025gips}. That study uses the same benchmark family but not the same experimental setup as the present report: it evaluates all 30 public IHTC instances, whereas the current MDEO-Cloud evaluation reports Tests~01--10 only. The published GIPS approach also relies on Gurobi within a MILP pipeline, rather than NSGA-II search in MDEO-Cloud.
+
+For that reason, the GIPS results should be interpreted as contextual benchmark evidence rather than as a third arm of the controlled experiment. The GIPS paper reports feasible solutions for all 30 public instances within the original 10-minute competition limit and proves optimality for two public instances under a relaxed runtime budget. The present MDEO-Cloud study reports feasible schedules for all 10 tested instances. These outcomes describe different experimental settings and do not establish a direct ranking of runtime or benchmark coverage. Within the MDEO-Cloud study, Tests~01--09 provide the internally comparable runtime observations; Test~10 is not used for contextual runtime comparison because it had a different CPU-thread allocation.
 
 \reportsection{Qualitative Analysis}
 
@@ -464,6 +473,7 @@ In addition to quantitative results, the experiment will include a qualitative c
 \begin{itemize}
     \item \textbf{Benchmarking scope:} the evaluation is limited to the IHTC 2024 instances. Their resource mix, planning horizons, and demand patterns may not represent every hospital environment.
     \item \textbf{Scope of conclusions:} the results compare two implementations on the selected IHTC benchmarks; they do not establish that either approach is superior for all healthcare scheduling settings.
+    \item \textbf{Published-baseline comparability:} any comparison with published GIPS-based IHTC results is contextual only, because those results were obtained with a different solver paradigm, time-limit policy, and instance coverage.
     \item \textbf{Implementation differences:} the two solutions may use different internal representations, search operators, and objective decompositions. The reported measures must therefore be interpreted in their implementation-specific context.
     \item \textbf{Single-run sampling:} each instance is executed once because repeated runs of the larger instances are computationally expensive. The evaluation therefore reports observed outcomes rather than means, medians, confidence intervals, or statistical significance claims about stochastic-search reliability.
     \item \textbf{Model and conversion fidelity:} results depend on the correctness of the conversion from IHTC input data to each implementation and on the completeness of each model's constraints and objective calculations.
@@ -472,25 +482,14 @@ In addition to quantitative results, the experiment will include a qualitative c
 \subsection{MDEO-Cloud Solution}
 
 \begin{itemize}
-    \item \textbf{Runtime comparability:} MDEO-Cloud terminates after configured generations and evolutions rather than a wall-clock limit. Runtime therefore measures the computational cost of each implementation under its configured search budget, not an identical amount of computation.
+    \item \textbf{Runtime comparability:} MDEO-Cloud terminates after the fixed 300-generation limit rather than a wall-clock limit, regardless of whether the candidate set has converged. Runtime therefore measures the computational cost of one fixed-length search, not an identical amount of computation across implementations.
+    \item \textbf{Test~10 execution conditions:} Test~10 used additional CPU threads. Its 60-second script and model-transformation safeguards were not reached and did not affect termination or the reported result. It remains useful as an annotated large-instance observation, but it is not a directly comparable runtime point for the Tests~01--09 scalability trend or for cross-framework runtime comparisons without equivalent execution conditions.
     \item \textbf{Fixed generation budget:} Test~10 reached the configured 300-generation limit without clear evidence of convergence. The reported Pareto candidates may therefore be inferior to solutions obtainable with a larger search budget.
-    \item \textbf{Pareto-solution selection:} MDEO-Cloud can return many final Pareto candidates from one execution. These candidates are correlated outputs of the same search and may represent different objective trade-offs, so they are not treated as independent samples and are not averaged. The reported candidate for each instance follows an explicit selection rule based on the reported measures. Tests~01--09 use the feasible candidate with the highest number of admitted patients, while Test~10 uses an admission--coverage trade-off.
 \end{itemize}
 
 \subsection{Python-Based Solution}
 
 \textit{To be completed by the author of the Python-based solution.}
-
-\reportsection{Consistency Notes}
-
-To keep the comparison valid, the final experiment document and implementation should ensure that:
-
-\begin{itemize}
-    \item terminology matches the IHTC metamodel;
-    \item objectives match the implemented objective functions;
-    \item constraints match the implemented transformations and validation logic;
-    \item both frameworks are evaluated on equivalent problem instances and solver conditions.
-\end{itemize}
 
 \begin{thebibliography}{9}
 
@@ -508,6 +507,11 @@ K.~Deb, A.~Pratap, S.~Agarwal, and T.~Meyarivan,
 N.~Krieger,
 \textit{A Cloud-Based Platform for Model-Driven Evolutionary Optimization},
 Master's thesis, University of Stuttgart, 2026.
+
+\bibitem{kratz2025gips}
+M.~Kratz, S.~Zschaler, D.~Str\"uber, and T.~Goldschmidt,
+\textit{High-Level Specification of MILP Problems with Class Diagrams and Graph Transformations},
+SSRN preprint, 2025. Available at: \url{https://ssrn.com/abstract=5768119}.
 
 \end{thebibliography}
 
